@@ -85,6 +85,20 @@ var eventTypes = {
       captured: keyOf({onTouchTapCapture: null})
     },
     dependencies: dependencies
+  },
+  touchTapStart: {
+    phasedRegistrationNames: {
+      bubbled: keyOf({onTouchTapStart: null}),
+      captured: keyOf({onTouchTapStartCapture: null})
+    },
+    dependencies
+  },
+  touchTapEnd: {
+    phasedRegistrationNames: {
+      bubbled: keyOf({onTouchTapEnd: null}),
+      captured: keyOf({onTouchTapEndCapture: null})
+    },
+    dependencies
   }
 };
 
@@ -107,11 +121,27 @@ var TapEventPlugin = {
       topLevelTarget,
       topLevelTargetID,
       nativeEvent) {
+    var event = null;
+    var eventStart, eventEnd;
+    var distance;
     if (!isStartish(topLevelType) && !isEndish(topLevelType)) {
+      if (startCoords.x && startCoords.y) {
+        distance = getDistance(startCoords, nativeEvent);
+        if (distance >= tapMoveThreshold) {
+          startCoords.x = 0;
+          startCoords.y = 0;
+          eventEnd = SyntheticUIEvent.getPooled(
+            eventTypes.touchTapEnd,
+            topLevelTargetID,
+            nativeEvent
+          );
+          EventPropagators.accumulateTwoPhaseDispatches(eventEnd);
+          return eventEnd;
+        }
+      }
       return null;
     }
-    var event = null;
-    var distance = getDistance(startCoords, nativeEvent);
+    distance = getDistance(startCoords, nativeEvent);
     if (isEndish(topLevelType) && distance < tapMoveThreshold) {
       event = SyntheticUIEvent.getPooled(
         eventTypes.touchTap,
@@ -122,6 +152,13 @@ var TapEventPlugin = {
     if (isStartish(topLevelType)) {
       startCoords.x = getAxisCoordOfEvent(Axis.x, nativeEvent);
       startCoords.y = getAxisCoordOfEvent(Axis.y, nativeEvent);
+      eventStart = SyntheticUIEvent.getPooled(
+        eventTypes.touchTapStart,
+        topLevelTargetID,
+        nativeEvent
+      );
+      EventPropagators.accumulateTwoPhaseDispatches(eventStart);
+      return eventStart;
     } else if (isEndish(topLevelType)) {
       startCoords.x = 0;
       startCoords.y = 0;

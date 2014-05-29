@@ -36,6 +36,16 @@ var cx = require('cx');
 var cloneWithProps = require('cloneWithProps');
 var update = require('update');
 
+// Enable touch events prior to pulling in TapEventPlugin
+React.initializeTouchEvents(true);
+
+var EventPluginHub = require("EventPluginHub");
+var TapEventPlugin = require('TapEventPlugin');
+
+EventPluginHub.injection.injectEventPluginsByName({
+  TapEventPlugin: TapEventPlugin
+});
+
 React.addons = {
   CSSTransitionGroup: ReactCSSTransitionGroup,
   LinkedStateMixin: LinkedStateMixin,

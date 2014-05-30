@@ -122,44 +122,54 @@ var TapEventPlugin = {
       topLevelTargetID,
       nativeEvent) {
     var event = null;
-    var eventStart, eventEnd;
     var distance;
+    // Dispatch event to onTapTouchEnd when tap gesture is cancelled by moving beyond threshold
     if (!isStartish(topLevelType) && !isEndish(topLevelType)) {
       if (startCoords.x && startCoords.y) {
         distance = getDistance(startCoords, nativeEvent);
         if (distance >= tapMoveThreshold) {
           startCoords.x = 0;
           startCoords.y = 0;
-          eventEnd = SyntheticUIEvent.getPooled(
+          event = SyntheticUIEvent.getPooled(
             eventTypes.touchTapEnd,
             topLevelTargetID,
             nativeEvent
           );
-          EventPropagators.accumulateTwoPhaseDispatches(eventEnd);
-          return eventEnd;
+          EventPropagators.accumulateTwoPhaseDispatches(event);
+          return event;
         }
       }
       return null;
     }
-    distance = getDistance(startCoords, nativeEvent);
-    if (isEndish(topLevelType) && distance < tapMoveThreshold) {
-      event = SyntheticUIEvent.getPooled(
-        eventTypes.touchTap,
-        topLevelTargetID,
-        nativeEvent
-      );
-    }
+    // Dispatch event to onTapTouchStart
     if (isStartish(topLevelType)) {
       startCoords.x = getAxisCoordOfEvent(Axis.x, nativeEvent);
       startCoords.y = getAxisCoordOfEvent(Axis.y, nativeEvent);
-      eventStart = SyntheticUIEvent.getPooled(
+      event = SyntheticUIEvent.getPooled(
         eventTypes.touchTapStart,
         topLevelTargetID,
         nativeEvent
       );
-      EventPropagators.accumulateTwoPhaseDispatches(eventStart);
-      return eventStart;
-    } else if (isEndish(topLevelType)) {
+      EventPropagators.accumulateTwoPhaseDispatches(event);
+      return event;
+    }
+    // Dispatch event to both onTapTouchEnd and onTapTouch
+    distance = getDistance(startCoords, nativeEvent);
+    if (isEndish(topLevelType)) {
+      if (distance < tapMoveThreshold) {
+        event = [
+          SyntheticUIEvent.getPooled(
+            eventTypes.touchTapEnd,
+            topLevelTargetID,
+            nativeEvent
+          ),
+          SyntheticUIEvent.getPooled(
+            eventTypes.touchTap,
+            topLevelTargetID,
+            nativeEvent
+          )
+        ];
+      }
       startCoords.x = 0;
       startCoords.y = 0;
     }

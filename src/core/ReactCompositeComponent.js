@@ -307,7 +307,7 @@ var ReactCompositeComponentInterface = {
    	* addComponent will trigger it. If implemented, components will be required to execute the callback on
    	* completing animation or any other task. context includes component that will get added.
    	*/
-   	componentWillDisappear: SpecPolicy.DEFINE_MANY,
+   	componentWillDisappear: SpecPolicy.DEFINE_ONCE,
    	/**
    	* componentDidDisappear : called on the previous top component, after a component gets added to the stack.
    	* addComponent will trigger it. context includes component that got added.
@@ -319,7 +319,7 @@ var ReactCompositeComponentInterface = {
    	* implemented, components will be required to execute the callback on completing animation or any other
    	* task. context includes component that will get removed.
    	*/
-   	componentWillAppear: SpecPolicy.DEFINE_MANY,
+   	componentWillAppear: SpecPolicy.DEFINE_ONCE,
    	/**
    	* componentDidAppear : called on component that came back at the top of the stack, after current top
    	* component is removed from stack. removeComponent, removeToAnchorComponent will trigger it. context

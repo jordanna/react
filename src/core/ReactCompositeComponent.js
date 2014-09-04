@@ -301,6 +301,37 @@ var ReactCompositeComponentInterface = {
   componentWillUnmount: SpecPolicy.DEFINE_MANY,
 
 
+   // ================= Additional Lifecycle Methods ==================  
+   /**
+   	* componentWillDisappear : called on current top component, before a component gets added to the stack.
+   	* addComponent will trigger it. If implemented, components will be required to execute the callback on
+   	* completing animation or any other task. context includes component that will get added.
+   	*/
+   	componentWillDisappear: SpecPolicy.DEFINE_MANY,
+   	/**
+   	* componentDidDisappear : called on the previous top component, after a component gets added to the stack.
+   	* addComponent will trigger it. context includes component that got added.
+   	*/
+   	componentDidDisappear: SpecPolicy.DEFINE_MANY,
+   	/**
+   	* componentWillAppear : called on component that will come back to the top of the stack, before current
+   	* top component is removed from stack. removeComponent, removeToAnchorComponent will trigger it. If
+   	* implemented, components will be required to execute the callback on completing animation or any other
+   	* task. context includes component that will get removed.
+   	*/
+   	componentWillAppear: SpecPolicy.DEFINE_MANY,
+   	/**
+   	* componentDidAppear : called on component that came back at the top of the stack, after current top
+   	* component is removed from stack. removeComponent, removeToAnchorComponent will trigger it. context
+   	* includes component that will got removed.
+   	*/
+   	componentDidAppear: SpecPolicy.DEFINE_MANY,
+
+ /**
+  * componentWillUnload : called before a component is removed from the stack. removeComponent, removeToAnchorComponent will trigger it. If implemented, components will be required to execute the callback on completing animation or any other task.
+  */
+ //componentWillUnload: SpecPolicy.DEFINE_MANY,
+
 
   // ==== Advanced methods ====
 

@@ -19,163 +19,214 @@
 
 "use strict";
 
-var EventConstants = require('EventConstants');
-var EventPluginUtils = require('EventPluginUtils');
-var EventPropagators = require('EventPropagators');
-var SyntheticUIEvent = require('SyntheticUIEvent');
-var TouchEventUtils = require('TouchEventUtils');
-var ViewportMetrics = require('ViewportMetrics');
+//var DeviceLogger = window.global.DeviceLogger || window.console;
+var EventConstants = require("EventConstants");
+var EventPluginUtils = require("EventPluginUtils");
+var EventPropagators = require("EventPropagators");
+var SyntheticUIEvent = require("SyntheticUIEvent");
+var TouchEventUtils = require("TouchEventUtils");
+var ViewportMetrics = require("ViewportMetrics");
 
-var keyOf = require('keyOf');
+var keyOf = require("keyOf");
 var topLevelTypes = EventConstants.topLevelTypes;
 
 var isStartish = EventPluginUtils.isStartish;
 var isEndish = EventPluginUtils.isEndish;
 
+//TODO: Make thresholds configurable instead of constants
 /**
  * Number of pixels that are tolerated in between a `touchStart` and `touchEnd`
  * in order to still be considered a 'tap' event.
  */
 var tapMoveThreshold = 10;
+
+/**
+ * Time tolerated in between a `touchStart` and `touchEnd`
+ * in order to still be considered a `tap` event.
+ */
+var tapTimeThreshold = 2000;
+
 var startCoords = {x: null, y: null};
 
 var Axis = {
-  x: {page: 'pageX', client: 'clientX', envScroll: 'currentPageScrollLeft'},
-  y: {page: 'pageY', client: 'clientY', envScroll: 'currentPageScrollTop'}
+    x: {page: 'pageX', client: 'clientX', envScroll: 'currentPageScrollLeft'},
+    y: {page: 'pageY', client: 'clientY', envScroll: 'currentPageScrollTop'}
+};
+
+var Time = {
+    start : 0,
+    end : 0
 };
 
 function getAxisCoordOfEvent(axis, nativeEvent) {
-  var singleTouch = TouchEventUtils.extractSingleTouch(nativeEvent);
-  if (singleTouch) {
-    return singleTouch[axis.page];
-  }
-  return axis.page in nativeEvent ?
-    nativeEvent[axis.page] :
-    nativeEvent[axis.client] + ViewportMetrics[axis.envScroll];
+    var singleTouch = TouchEventUtils.extractSingleTouch(nativeEvent);
+    if (singleTouch) {
+        return singleTouch[axis.page];
+    }
+    return axis.page in nativeEvent ?
+        nativeEvent[axis.page] :
+        nativeEvent[axis.client] + ViewportMetrics[axis.envScroll];
 }
 
 function getDistance(coords, nativeEvent) {
-  var pageX = getAxisCoordOfEvent(Axis.x, nativeEvent);
-  var pageY = getAxisCoordOfEvent(Axis.y, nativeEvent);
-  return Math.pow(
-    Math.pow(pageX - coords.x, 2) + Math.pow(pageY - coords.y, 2),
-    0.5
-  );
+    var pageX = getAxisCoordOfEvent(Axis.x, nativeEvent);
+    var pageY = getAxisCoordOfEvent(Axis.y, nativeEvent);
+    var distance = Math.pow(
+        Math.pow(pageX - coords.x, 2) + Math.pow(pageY - coords.y, 2),
+        0.5
+    );
+    //DeviceLogger.error('distance ='+distance);
+    return distance;
+}
+
+function getTime(nativeEvent) {
+    return nativeEvent.timeStamp;
+}
+
+function getDuration() {
+    var duration = Time.end - Time.start;
+    //DeviceLogger.error('duration ='+duration);
+    return  duration;
 }
 
 var dependencies = [
-  topLevelTypes.topMouseDown,
-  topLevelTypes.topMouseMove,
-  topLevelTypes.topMouseUp
+    topLevelTypes.topMouseDown,
+    topLevelTypes.topMouseMove,
+    topLevelTypes.topMouseUp
 ];
 
 if (EventPluginUtils.useTouchEvents) {
-  dependencies.push(
-    topLevelTypes.topTouchCancel,
-    topLevelTypes.topTouchEnd,
-    topLevelTypes.topTouchStart,
-    topLevelTypes.topTouchMove
-  );
+    dependencies.push(
+        topLevelTypes.topTouchCancel,
+        topLevelTypes.topTouchEnd,
+        topLevelTypes.topTouchStart,
+        topLevelTypes.topTouchMove
+    );
 }
 
 var eventTypes = {
-  touchTap: {
-    phasedRegistrationNames: {
-      bubbled: keyOf({onTouchTap: null}),
-      captured: keyOf({onTouchTapCapture: null})
+    touchTap: {
+        phasedRegistrationNames: {
+            bubbled: keyOf({onTap: null}),
+            captured: keyOf({onTapCapture: null})
+        },
+        dependencies: dependencies
     },
-    dependencies: dependencies
-  },
-  touchTapStart: {
-    phasedRegistrationNames: {
-      bubbled: keyOf({onTouchTapStart: null}),
-      captured: keyOf({onTouchTapStartCapture: null})
+    touchTapStart: {
+        phasedRegistrationNames: {
+            bubbled: keyOf({onTapStart: null}),
+            captured: keyOf({onTapStartCapture: null})
+        },
+        dependencies:dependencies
     },
-    dependencies
-  },
-  touchTapEnd: {
-    phasedRegistrationNames: {
-      bubbled: keyOf({onTouchTapEnd: null}),
-      captured: keyOf({onTouchTapEndCapture: null})
-    },
-    dependencies
-  }
+    touchTapEnd: {
+        phasedRegistrationNames: {
+            bubbled: keyOf({onTapEnd: null}),
+            captured: keyOf({onTapEndCapture: null})
+        },
+        dependencies:dependencies
+    }
 };
 
 var TapEventPlugin = {
 
-  tapMoveThreshold: tapMoveThreshold,
+    tapMoveThreshold: tapMoveThreshold,
 
-  eventTypes: eventTypes,
+    eventTypes: eventTypes,
 
-  /**
-   * @param {string} topLevelType Record from `EventConstants`.
-   * @param {DOMEventTarget} topLevelTarget The listening component root node.
-   * @param {string} topLevelTargetID ID of `topLevelTarget`.
-   * @param {object} nativeEvent Native browser event.
-   * @return {*} An accumulation of synthetic events.
-   * @see {EventPluginHub.extractEvents}
-   */
-  extractEvents: function(
-      topLevelType,
-      topLevelTarget,
-      topLevelTargetID,
-      nativeEvent) {
-    var event = null;
-    var distance;
-    // Dispatch event to onTapTouchEnd when tap gesture is cancelled by moving beyond threshold
-    if (!isStartish(topLevelType) && !isEndish(topLevelType)) {
-      if (startCoords.x && startCoords.y) {
-        distance = getDistance(startCoords, nativeEvent);
-        if (distance >= tapMoveThreshold) {
-          startCoords.x = 0;
-          startCoords.y = 0;
-          event = SyntheticUIEvent.getPooled(
-            eventTypes.touchTapEnd,
-            topLevelTargetID,
-            nativeEvent
-          );
-          EventPropagators.accumulateTwoPhaseDispatches(event);
-          return event;
-        }
-      }
-      return null;
-    }
-    // Dispatch event to onTapTouchStart
-    if (isStartish(topLevelType)) {
-      startCoords.x = getAxisCoordOfEvent(Axis.x, nativeEvent);
-      startCoords.y = getAxisCoordOfEvent(Axis.y, nativeEvent);
-      event = SyntheticUIEvent.getPooled(
-        eventTypes.touchTapStart,
+    /**
+     * @param {string} topLevelType Record from `EventConstants`.
+     * @param {DOMEventTarget} topLevelTarget The listening component root node.
+     * @param {string} topLevelTargetID ID of `topLevelTarget`.
+     * @param {object} nativeEvent Native browser event.
+     * @return {*} An accumulation of synthetic events.
+     * @see {EventPluginHub.extractEvents}
+     */
+    extractEvents: function(
+        topLevelType,
+        topLevelTarget,
         topLevelTargetID,
-        nativeEvent
-      );
-      EventPropagators.accumulateTwoPhaseDispatches(event);
-      return event;
+        nativeEvent) {
+
+        //DeviceLogger.error('event = %s topLevelType = %s', nativeEvent.type , topLevelType);
+        var event = null;
+        var distance;
+        // Dispatch event to onTapTouchEnd when tap gesture is cancelled by moving beyond threshold
+        if (!isStartish(topLevelType) && !isEndish(topLevelType)) {
+            if (startCoords.x && startCoords.y) {
+                distance = getDistance(startCoords, nativeEvent);
+                if (distance >= tapMoveThreshold) {
+                    startCoords.x = 0;
+                    startCoords.y = 0;
+                    event = SyntheticUIEvent.getPooled(
+                        eventTypes.touchTapEnd,
+                        topLevelTargetID,
+                        nativeEvent
+                    );
+                    EventPropagators.accumulateTwoPhaseDispatches(event);
+                    return event;
+                }
+            }
+            return null;
+        }
+        // Dispatch event to onTapTouchStart
+        if (isStartish(topLevelType)) {
+            // set start time
+            Time.start = getTime(nativeEvent);
+            //DeviceLogger.error('setting start = %s' , Time.start);
+            startCoords.x = getAxisCoordOfEvent(Axis.x, nativeEvent);
+            startCoords.y = getAxisCoordOfEvent(Axis.y, nativeEvent);
+            event = SyntheticUIEvent.getPooled(
+                eventTypes.touchTapStart,
+                topLevelTargetID,
+                nativeEvent
+            );
+            EventPropagators.accumulateTwoPhaseDispatches(event);
+            return event;
+        }
+
+        // Dispatch event to both onTapTouchEnd and onTapTouch
+        if (isEndish(topLevelType)) {
+            Time.end = getTime(nativeEvent);
+            //DeviceLogger.error('setting end = %s',Time.end);
+
+            if (getDuration() > tapTimeThreshold) {
+                //DeviceLogger.error('ignore tap as time threshold exceeded');
+                event = [
+                    SyntheticUIEvent.getPooled(
+                        eventTypes.touchTapEnd,
+                        topLevelTargetID,
+                        nativeEvent
+                    )
+                ];
+            } else {
+                distance = getDistance(startCoords, nativeEvent);
+                event = [
+                    SyntheticUIEvent.getPooled(
+                        eventTypes.touchTapEnd,
+                        topLevelTargetID,
+                        nativeEvent
+                    )];
+                if (distance < tapMoveThreshold) {
+                    event.push(
+                        SyntheticUIEvent.getPooled(
+                            eventTypes.touchTap,
+                            topLevelTargetID,
+                            nativeEvent
+                        )
+                    );
+                } else {
+                    //DeviceLogger.error('ignore tap as move threshold exceeded');
+                }
+            }
+        }
+        startCoords.x = 0;
+        startCoords.y = 0;
+        Time.start = 0;
+        Time.end = 0;
+        EventPropagators.accumulateTwoPhaseDispatches(event);
+        return event;
     }
-    // Dispatch event to both onTapTouchEnd and onTapTouch
-    distance = getDistance(startCoords, nativeEvent);
-    if (isEndish(topLevelType)) {
-      if (distance < tapMoveThreshold) {
-        event = [
-          SyntheticUIEvent.getPooled(
-            eventTypes.touchTapEnd,
-            topLevelTargetID,
-            nativeEvent
-          ),
-          SyntheticUIEvent.getPooled(
-            eventTypes.touchTap,
-            topLevelTargetID,
-            nativeEvent
-          )
-        ];
-      }
-      startCoords.x = 0;
-      startCoords.y = 0;
-    }
-    EventPropagators.accumulateTwoPhaseDispatches(event);
-    return event;
-  }
 
 };
 

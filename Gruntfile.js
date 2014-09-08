@@ -12,6 +12,7 @@ var releaseTasks = require('./grunt/tasks/release');
 var npmReactTasks = require('./grunt/tasks/npm-react');
 var npmReactToolsTasks = require('./grunt/tasks/npm-react-tools');
 var versionCheckTask = require('./grunt/tasks/version-check');
+var gemReactSourceTasks = require('./grunt/tasks/gem-react-source');
 
 module.exports = function(grunt) {
 
@@ -66,7 +67,10 @@ module.exports = function(grunt) {
 
   grunt.registerTask('npm-react:release', npmReactTasks.buildRelease);
   grunt.registerTask('npm-react:pack', npmReactTasks.packRelease);
-  grunt.registerTask('npm-react-tools:pack', npmReactToolsTasks.pack);
+  grunt.registerTask('npm-react-tools:release', npmReactToolsTasks.buildRelease);
+  grunt.registerTask('npm-react-tools:pack', npmReactToolsTasks.packRelease);
+  grunt.registerTask('gem-react-source:release', gemReactSourceTasks.buildRelease);
+  grunt.registerTask('gem-react-source:pack', gemReactSourceTasks.packRelease);
 
   grunt.registerTask('version-check', versionCheckTask);
 
@@ -95,6 +99,7 @@ module.exports = function(grunt) {
     'populist:test'
   ]);
   grunt.registerTask('build:npm-react', ['version-check', 'jsx:normal', 'npm-react:release']);
+  grunt.registerTask('build:gem-react-source', ['build', 'gem-react-source:release'])
 
   grunt.registerTask('webdriver-phantomjs', webdriverPhantomJSTask);
 
@@ -147,6 +152,18 @@ module.exports = function(grunt) {
     'connect',
     'sauce-tunnel',
     'webdriver-jasmine:saucelabs_' + (process.env.BROWSER_NAME || 'ie8')
+  ]);
+
+  grunt.registerTask('test:webdriver:saucelabs:modern', [
+    'build:test',
+    'build:basic',
+
+    'connect',
+    'sauce-tunnel',
+    'webdriver-jasmine:saucelabs_android',
+    'webdriver-jasmine:saucelabs_firefox',
+    'webdriver-jasmine:saucelabs_chrome',
+    'webdriver-jasmine:saucelabs_ie11'
   ]);
 
   grunt.registerTask('test:webdriver:saucelabs:ie', [
@@ -208,6 +225,7 @@ module.exports = function(grunt) {
     'browserify:addonsMin',
     'npm-react:release',
     'npm-react:pack',
+    'npm-react-tools:release',
     'npm-react-tools:pack',
     'copy:react_docs',
     'compare_size'
@@ -224,21 +242,14 @@ module.exports = function(grunt) {
     'release:setup',
     'clean',
     'build',
-    'gem:only',
+    'gem-react-source:release',
+    'gem-react-source:pack',
     'release:bower',
     'release:starter',
     'compress',
     'release:docs',
     'release:msg'
   ]);
-
-  // `gem` task to build the react-source gem
-  grunt.registerTask('gem', ['build', 'gem:only']);
-
-  grunt.registerTask('gem:only', function() {
-    var done = this.async();
-    exec('gem build react-source.gemspec', done);
-  });
 
   // The default task - build - to keep setup easy
   grunt.registerTask('default', ['build']);

@@ -1,7 +1,6 @@
 ---
 id: component-specs
 title: Component Specs and Lifecycle
-layout: docs
 permalink: component-specs.html
 prev: component-api.html
 next: tags-and-attributes.html
@@ -22,7 +21,7 @@ The `render()` method is required.
 
 When called, it should examine `this.props` and `this.state` and return a single child component. This child component can be either a virtual representation of a native DOM component (such as `<div />` or `React.DOM.div()`) or another composite component that you've defined yourself.
 
-You can also return `null` or `false` to indicate that you don't want anything rendered. Behind the scenes, React renders a `<script>` tag to work with our current diffing algorithm. When returning `null` or `false`, `this.getDOMNode()` will return `null`.
+You can also return `null` or `false` to indicate that you don't want anything rendered. Behind the scenes, React renders a `<noscript>` tag to work with our current diffing algorithm. When returning `null` or `false`, `this.getDOMNode()` will return `null`.
 
 The `render()` function should be *pure*, meaning that it does not modify component state, it returns the same result each time it's invoked, and it does not read from or write to the DOM or otherwise interact with the browser (e.g., by using `setTimeout`). If you need to interact with the browser, perform your work in `componentDidMount()` or the other lifecycle methods instead. Keeping `render()` pure makes server rendering more practical and makes components easier to think about.
 
@@ -42,9 +41,9 @@ Invoked once before the component is mounted. The return value will be used as t
 object getDefaultProps()
 ```
 
-Invoked once when the component is mounted. Values in the mapping will be set on `this.props` if that prop is not specified by the parent component (i.e. using an `in` check).
+Invoked once and cached when the class is created. Values in the mapping will be set on `this.props` if that prop is not specified by the parent component (i.e. using an `in` check).
 
-This method is invoked before `getInitialState` and therefore cannot rely on `this.state` or use `this.setState`.
+This method is invoked before any instances are created and thus cannot rely on `this.props`. In addition, be aware that any complex objects returned by `getDefaultProps()` will be shared across instances, not copied.
 
 
 ### propTypes
@@ -96,7 +95,7 @@ Methods defined within this block are _static_, meaning that you can run them be
 string displayName
 ```
 
-The `displayName` string is used in debugging messages. JSX sets this value automatically, see [JSX in Depth](/react/docs/jsx-in-depth.html#react-composite-components).
+The `displayName` string is used in debugging messages. JSX sets this value automatically; see [JSX in Depth](/react/docs/jsx-in-depth.html#react-composite-components).
 
 
 ## Lifecycle Methods
@@ -164,7 +163,7 @@ transition to the new props and state will not require a component update.
 
 ```javascript
 shouldComponentUpdate: function(nextProps, nextState) {
-  return !equal(nextProps, this.props) || !equal(nextState, this.state);
+  return nextProps.id !== this.props.id;
 }
 ```
 

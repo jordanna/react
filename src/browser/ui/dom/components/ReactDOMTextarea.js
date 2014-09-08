@@ -23,15 +23,24 @@ var DOMPropertyOperations = require('DOMPropertyOperations');
 var LinkedValueUtils = require('LinkedValueUtils');
 var ReactBrowserComponentMixin = require('ReactBrowserComponentMixin');
 var ReactCompositeComponent = require('ReactCompositeComponent');
+var ReactDescriptor = require('ReactDescriptor');
 var ReactDOM = require('ReactDOM');
+var ReactUpdates = require('ReactUpdates');
 
 var invariant = require('invariant');
 var merge = require('merge');
 
 var warning = require('warning');
 
-// Store a reference to the <textarea> `ReactDOMComponent`.
-var textarea = ReactDOM.textarea;
+// Store a reference to the <textarea> `ReactDOMComponent`. TODO: use string
+var textarea = ReactDescriptor.createFactory(ReactDOM.textarea.type);
+
+function forceUpdateIfMounted() {
+  /*jshint validthis:true */
+  if (this.isMounted()) {
+    this.forceUpdate();
+  }
+}
 
 /**
  * Implements a <textarea> native component that allows setting `value`, and
@@ -88,20 +97,13 @@ var ReactDOMTextarea = ReactCompositeComponent.createClass({
       // `textContent` (unnecessary since we update value).
       // The initial value can be a boolean or object so that's why it's
       // forced to be a string.
-      initialValue: '' + (value != null ? value : defaultValue),
-      value: defaultValue
+      initialValue: '' + (value != null ? value : defaultValue)
     };
-  },
-
-  shouldComponentUpdate: function() {
-    // Defer any updates to this component during the `onChange` handler.
-    return !this._isChanging;
   },
 
   render: function() {
     // Clone `this.props` so we don't mutate the input.
     var props = merge(this.props);
-    var value = LinkedValueUtils.getValue(this);
 
     invariant(
       props.dangerouslySetInnerHTML == null,
@@ -109,7 +111,7 @@ var ReactDOMTextarea = ReactCompositeComponent.createClass({
     );
 
     props.defaultValue = null;
-    props.value = value != null ? value : this.state.value;
+    props.value = null;
     props.onChange = this._handleChange;
 
     // Always set children to the same thing. In IE9, the selection range will
@@ -131,11 +133,9 @@ var ReactDOMTextarea = ReactCompositeComponent.createClass({
     var returnValue;
     var onChange = LinkedValueUtils.getOnChange(this);
     if (onChange) {
-      this._isChanging = true;
       returnValue = onChange.call(this, event);
-      this._isChanging = false;
     }
-    this.setState({value: event.target.value});
+    ReactUpdates.setImmediate(forceUpdateIfMounted, this);
     return returnValue;
   }
 

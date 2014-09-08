@@ -26,6 +26,7 @@ var emptyFunction = require('emptyFunction');
 var merge = require('merge');
 
 var ReactTransitionGroup = React.createClass({
+  displayName: 'ReactTransitionGroup',
 
   propTypes: {
     component: React.PropTypes.func,
@@ -182,7 +183,11 @@ var ReactTransitionGroup = React.createClass({
         );
       }
     }
-    return this.transferPropsTo(this.props.component(null, childrenToRender));
+    return React.createElement(
+      this.props.component,
+      this.props,
+      childrenToRender
+    );
   }
 });
 

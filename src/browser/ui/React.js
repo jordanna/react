@@ -18,6 +18,10 @@
 
 "use strict";
 
+// TODO: Move this elsewhere - it only exists in open source until a better
+// solution is found.
+require('Object.es6');
+
 var DOMPropertyOperations = require('DOMPropertyOperations');
 var EventPluginUtils = require('EventPluginUtils');
 var ReactChildren = require('ReactChildren');
@@ -26,10 +30,12 @@ var ReactCompositeComponent = require('ReactCompositeComponent');
 var ReactContext = require('ReactContext');
 var ReactCurrentOwner = require('ReactCurrentOwner');
 var ReactDescriptor = require('ReactDescriptor');
+var ReactDescriptorValidator = require('ReactDescriptorValidator');
 var ReactDOM = require('ReactDOM');
 var ReactDOMComponent = require('ReactDOMComponent');
 var ReactDefaultInjection = require('ReactDefaultInjection');
 var ReactInstanceHandles = require('ReactInstanceHandles');
+var ReactLegacyDescriptor = require('ReactLegacyDescriptor');
 var ReactMount = require('ReactMount');
 var ReactMultiChild = require('ReactMultiChild');
 var ReactPerf = require('ReactPerf');
@@ -41,10 +47,27 @@ var onlyChild = require('onlyChild');
 
 ReactDefaultInjection.inject();
 
+var createDescriptor = ReactDescriptor.createDescriptor;
+var createFactory = ReactDescriptor.createFactory;
+
+if (__DEV__) {
+  createDescriptor = ReactDescriptorValidator.createDescriptor;
+  createFactory = ReactDescriptorValidator.createFactory;
+}
+
+// TODO: Drop legacy descriptors once classes no longer export these factories
+createDescriptor = ReactLegacyDescriptor.wrapCreateDescriptor(
+  createDescriptor
+);
+createFactory = ReactLegacyDescriptor.wrapCreateFactory(
+  createFactory
+);
+
 var React = {
   Children: {
     map: ReactChildren.map,
     forEach: ReactChildren.forEach,
+    count: ReactChildren.count,
     only: onlyChild
   },
   DOM: ReactDOM,
@@ -53,6 +76,9 @@ var React = {
     EventPluginUtils.useTouchEvents = shouldUseTouch;
   },
   createClass: ReactCompositeComponent.createClass,
+  createDescriptor: createDescriptor, // deprecated, will be removed next week
+  createElement: createDescriptor,
+  createFactory: createFactory,
   constructAndRenderComponent: ReactMount.constructAndRenderComponent,
   constructAndRenderComponentByID: ReactMount.constructAndRenderComponentByID,
   renderComponent: ReactPerf.measure(
@@ -85,8 +111,8 @@ if (__DEV__) {
       window.top === window.self &&
       navigator.userAgent.indexOf('Chrome') > -1) {
     console.debug(
-      'Download the React DevTools for a better development experience: ' +
-      'http://fb.me/react-devtools'
+      'If you haven\'t already, download the React DevTools for a better ' +
+      'development experience: http://fb.me/react-devtools'
     );
 
     var expectedFeatures = [
@@ -100,18 +126,18 @@ if (__DEV__) {
       Function.prototype.bind,
       Object.keys,
       String.prototype.split,
+      String.prototype.trim,
 
       // shams
       Object.create,
       Object.freeze
     ];
 
-    for (var i in expectedFeatures) {
+    for (var i = 0; i < expectedFeatures.length; i++) {
       if (!expectedFeatures[i]) {
         console.error(
           'One or more ES5 shim/shams expected by React are not available: ' +
-          'http://facebook.github.io/react/docs/working-with-the-browser.html' +
-          '#polyfills-needed-to-support-older-browsers'
+          'http://fb.me/react-warning-polyfills'
         );
         break;
       }
@@ -121,6 +147,6 @@ if (__DEV__) {
 
 // Version exists only in the open-source version of React, not in Facebook's
 // internal version.
-React.version = '0.11.0-alpha';
+React.version = '0.12.0-alpha';
 
 module.exports = React;

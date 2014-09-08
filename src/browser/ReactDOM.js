@@ -20,6 +20,8 @@
 "use strict";
 
 var ReactDescriptor = require('ReactDescriptor');
+var ReactDescriptorValidator = require('ReactDescriptorValidator');
+var ReactLegacyDescriptor = require('ReactLegacyDescriptor');
 var ReactDOMComponent = require('ReactDOMComponent');
 
 var mergeInto = require('mergeInto');
@@ -41,16 +43,21 @@ var mapObject = require('mapObject');
  * @private
  */
 function createDOMComponentClass(omitClose, tag) {
-  var Constructor = function(descriptor) {
-    this.construct(descriptor);
+  var Constructor = function(props) {
+    // This constructor and it's argument is currently used by mocks.
   };
   Constructor.prototype = new ReactDOMComponent(tag, omitClose);
   Constructor.prototype.constructor = Constructor;
   Constructor.displayName = tag;
 
-  var ConvenienceConstructor = ReactDescriptor.createFactory(Constructor);
-
-  return ConvenienceConstructor;
+  if (__DEV__) {
+    return ReactLegacyDescriptor.wrapFactory(
+      ReactDescriptorValidator.createFactory(Constructor)
+    );
+  }
+  return ReactLegacyDescriptor.wrapFactory(
+    ReactDescriptor.createFactory(Constructor)
+  );
 }
 
 /**
@@ -88,6 +95,7 @@ var ReactDOM = mapObject({
   del: false,
   details: false,
   dfn: false,
+  dialog: false,
   div: false,
   dl: false,
   dt: false,
@@ -174,6 +182,7 @@ var ReactDOM = mapObject({
   // SVG
   circle: false,
   defs: false,
+  ellipse: false,
   g: false,
   line: false,
   linearGradient: false,

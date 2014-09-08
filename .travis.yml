@@ -2,12 +2,25 @@
 language: node_js
 node_js:
 - '0.10'
+cache:
+  directories:
+  - node_modules
+before_install:
+- |
+    if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then
+      PR_FIRST=$(curl -s https://github.com/${TRAVIS_REPO_SLUG}/pull/${TRAVIS_PULL_REQUEST}.patch | head -1 | grep -o -E '\b[0-9a-f]{40}\b' | tr -d '\n')
+      TRAVIS_COMMIT_RANGE=$PR_FIRST^..$TRAVIS_COMMIT
+    fi
+    git diff --name-only $TRAVIS_COMMIT_RANGE | grep -qvE '(\.md$)|(^(docs|examples))/' || {
+      echo "Only docs were updated, stopping build process."
+      exit
+    }
 script:
 - |
     grunt $TEST_TYPE
 after_script:
 - |
-    if [ "$TEST_TYPE" = test:full ] && [ "$SERVER" ]; then
+    if [ "$TEST_TYPE" = test ] && [ "$SERVER" ]; then
       grunt build
       curl \
         -F "react=@build/react.js" \
@@ -26,16 +39,9 @@ after_script:
     fi
 env:
   matrix:
-  - TEST_TYPE=test:full
+  - TEST_TYPE=test
   - TEST_TYPE=lint
-  - TEST_TYPE=perf:full
-  - TEST_TYPE=test:coverage
-  - TEST_TYPE=test:webdriver:saucelabs BROWSER_NAME=ie11
-  - TEST_TYPE=test:webdriver:saucelabs BROWSER_NAME=ie10
-  - TEST_TYPE=test:webdriver:saucelabs BROWSER_NAME=ie9
-  - TEST_TYPE=test:webdriver:saucelabs BROWSER_NAME=ie8
-  - TEST_TYPE=test:webdriver:saucelabs:ios
-  - TEST_TYPE=test:webdriver:saucelabs BROWSER_NAME=safari
+  - TEST_TYPE=test:webdriver:saucelabs:modern
   global:
   # SERVER
   - secure: qPvsJ46XzGrdIuPA70b55xQNGF8jcK7N1LN5CCQYYocXLa+fBrl+fTE77QvehOPhqwJXcj6kOxI+sY0KrVwV7gmq2XY2HZGWUSCxTN0SZlNIzqPA80Y7G/yOjA4PUt8LKgP+8tptyhTAY56qf+hgW8BoLiKOdztYF2p+3zXOLuA=
@@ -47,6 +53,7 @@ matrix:
     - env: TEST_TYPE=lint
     - env: TEST_TYPE=test:coverage
     - env: TEST_TYPE=perf:full
+    - env: TEST_TYPE=test:webdriver:saucelabs:modern
     - env: TEST_TYPE=test:webdriver:saucelabs BROWSER_NAME=ie11
     - env: TEST_TYPE=test:webdriver:saucelabs BROWSER_NAME=ie10
     - env: TEST_TYPE=test:webdriver:saucelabs BROWSER_NAME=ie9

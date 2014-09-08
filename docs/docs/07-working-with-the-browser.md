@@ -1,7 +1,6 @@
 ---
 id: working-with-the-browser
 title: Working With the Browser
-layout: docs
 permalink: working-with-the-browser.html
 prev: forms.html
 next: more-about-refs.html
@@ -116,12 +115,15 @@ In addition to that philosophy, we've also taken the stance that we, as authors 
 `es5-shim.js` from [kriskowal's es5-shim](https://github.com/kriskowal/es5-shim) provides the following that React needs:
 
 * `Array.isArray`
+* `Array.prototype.every`
 * `Array.prototype.forEach`
 * `Array.prototype.indexOf`
-* `Array.prototype.some`
+* `Array.prototype.map`
 * `Date.now`
 * `Function.prototype.bind`
 * `Object.keys`
+* `String.prototype.split`
+* `String.prototype.trim`
 
 `es5-sham.js`, also from [kriskowal's es5-shim](https://github.com/kriskowal/es5-shim), provides the following that React needs:
 

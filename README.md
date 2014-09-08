@@ -8,10 +8,6 @@ React is a JavaScript library for building user interfaces.
 
 [Learn how to use React in your own project.](http://facebook.github.io/react/docs/getting-started.html)
 
-## The `react` npm package has recently changed!
-
-If you're looking for jeffbski's [React.js](https://github.com/jeffbski/autoflow) project, it's now in `npm` as `autoflow` rather than `react`.
-
 ## Examples
 
 We have several examples [on the website](http://facebook.github.io/react/). Here is the first one to get you started:
@@ -40,12 +36,12 @@ The fastest way to get started is to serve JavaScript from the CDN (also availab
 
 ```html
 <!-- The core React library -->
-<script src="http://fb.me/react-0.10.0.js"></script>
+<script src="http://fb.me/react-0.11.1.js"></script>
 <!-- In-browser JSX transformer, remove when pre-compiling JSX. -->
-<script src="http://fb.me/JSXTransformer-0.10.0.js"></script>
+<script src="http://fb.me/JSXTransformer-0.11.1.js"></script>
 ```
 
-We've also built a [starter kit](http://facebook.github.io/react/downloads/react-0.10.0.zip) which might be useful if this is your first time using React. It includes a webpage with an example of using React with live code.
+We've also built a [starter kit](http://facebook.github.io/react/downloads/react-0.11.1.zip) which might be useful if this is your first time using React. It includes a webpage with an example of using React with live code.
 
 If you'd like to use [bower](http://bower.io), it's as easy as:
 

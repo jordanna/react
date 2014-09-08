@@ -79,6 +79,8 @@ var ReactPlayground = React.createClass({
     codeText: React.PropTypes.string.isRequired,
     transformer: React.PropTypes.func,
     renderCode: React.PropTypes.bool,
+    showCompiledJSTab: React.PropTypes.bool,
+    editorTabTitle: React.PropTypes.string
   },
 
   getDefaultProps: function() {
@@ -86,6 +88,7 @@ var ReactPlayground = React.createClass({
       transformer: function(code) {
         return JSXTransformer.transform(code).code;
       },
+      editorTabTitle: 'Live JSX Editor',
       showCompiledJSTab: true
     };
   },
@@ -150,7 +153,7 @@ var ReactPlayground = React.createClass({
       <div
         className={JSXTabClassName}
         onClick={this.handleCodeModeSwitch.bind(this, this.MODES.JSX)}>
-          Live JSX Editor
+          {this.props.editorTabTitle}
       </div>
 
     return (
@@ -173,10 +176,11 @@ var ReactPlayground = React.createClass({
     this.executeCode();
   },
 
-  componentWillUpdate: function(nextProps, nextState) {
+  componentDidUpdate: function(prevProps, prevState) {
     // execute code only when the state's not being updated by switching tab
     // this avoids re-displaying the error, which comes after a certain delay
-    if (this.state.code !== nextState.code) {
+    if (this.props.transformer !== prevProps.transformer ||
+        this.state.code !== prevState.code) {
       this.executeCode();
     }
   },

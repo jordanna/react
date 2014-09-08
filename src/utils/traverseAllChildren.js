@@ -18,6 +18,7 @@
 
 "use strict";
 
+var ReactDescriptor = require('ReactDescriptor');
 var ReactInstanceHandles = require('ReactInstanceHandles');
 var ReactTextComponent = require('ReactTextComponent');
 
@@ -54,9 +55,9 @@ function userProvidedKeyEscaper(match) {
  * @return {string}
  */
 function getComponentKey(component, index) {
-  if (component && component.props && component.props.key != null) {
+  if (component && component.key != null) {
     // Explicit key
-    return wrapUserProvidedKey(component.props.key);
+    return wrapUserProvidedKey(component.key);
   }
   // Implicit key determined by the index in the set
   return index.toString(36);
@@ -126,8 +127,7 @@ var traverseAllChildrenImpl =
         // All of the above are perceived as null.
         callback(traverseContext, null, storageName, indexSoFar);
         subtreeCount = 1;
-      } else if (children.type && children.type.prototype &&
-                 children.type.prototype.mountComponentIntoNode) {
+      } else if (ReactDescriptor.isValidDescriptor(children)) {
         callback(traverseContext, children, storageName, indexSoFar);
         subtreeCount = 1;
       } else {
@@ -180,11 +180,14 @@ var traverseAllChildrenImpl =
  * @param {?*} children Children tree object.
  * @param {!function} callback To invoke upon traversing each child.
  * @param {?*} traverseContext Context for traversal.
+ * @return {!number} The number of children in this subtree.
  */
 function traverseAllChildren(children, callback, traverseContext) {
-  if (children !== null && children !== undefined) {
-    traverseAllChildrenImpl(children, '', 0, callback, traverseContext);
+  if (children == null) {
+    return 0;
   }
+
+  return traverseAllChildrenImpl(children, '', 0, callback, traverseContext);
 }
 
 module.exports = traverseAllChildren;

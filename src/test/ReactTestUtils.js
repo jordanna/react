@@ -24,14 +24,13 @@ var EventPropagators = require('EventPropagators');
 var React = require('React');
 var ReactDescriptor = require('ReactDescriptor');
 var ReactDOM = require('ReactDOM');
-var ReactEventEmitter = require('ReactEventEmitter');
+var ReactBrowserEventEmitter = require('ReactBrowserEventEmitter');
 var ReactMount = require('ReactMount');
 var ReactTextComponent = require('ReactTextComponent');
 var ReactUpdates = require('ReactUpdates');
 var SyntheticEvent = require('SyntheticEvent');
 
 var mergeInto = require('mergeInto');
-var copyProperties = require('copyProperties');
 
 var topLevelTypes = EventConstants.topLevelTypes;
 
@@ -238,15 +237,22 @@ var ReactTestUtils = {
    * @return {object} the ReactTestUtils object (for chaining)
    */
   mockComponent: function(module, mockTagName) {
+    mockTagName = mockTagName || module.mockTagName || "div";
+
     var ConvenienceConstructor = React.createClass({
       render: function() {
-        var mockTagName = mockTagName || module.mockTagName || "div";
-        return ReactDOM[mockTagName](null, this.props.children);
+        return React.createElement(
+          ReactDOM[mockTagName], // TODO: Replace this with just a string
+          null,
+          this.props.children
+        );
       }
     });
 
-    copyProperties(module, ConvenienceConstructor);
     module.mockImplementation(ConvenienceConstructor);
+
+    module.type = ConvenienceConstructor.type;
+    module.isReactLegacyFactory = true;
 
     return this;
   },
@@ -259,12 +265,11 @@ var ReactTestUtils = {
    * @param {?Event} fakeNativeEvent Fake native event to use in SyntheticEvent.
    */
   simulateNativeEventOnNode: function(topLevelType, node, fakeNativeEvent) {
-    var virtualHandler =
-      ReactEventEmitter.TopLevelCallbackCreator.createTopLevelCallback(
-        topLevelType
-      );
     fakeNativeEvent.target = node;
-    virtualHandler(fakeNativeEvent);
+    ReactBrowserEventEmitter.ReactEventListener.dispatchEvent(
+      topLevelType,
+      fakeNativeEvent
+    );
   },
 
   /**
@@ -319,7 +324,7 @@ function makeSimulator(eventType) {
     // We don't use SyntheticEvent.getPooled in order to not have to worry about
     // properly destroying any properties assigned from `eventData` upon release
     var event = new SyntheticEvent(
-      ReactEventEmitter.eventNameDispatchConfigs[eventType],
+      ReactBrowserEventEmitter.eventNameDispatchConfigs[eventType],
       ReactMount.getID(node),
       fakeNativeEvent
     );
@@ -337,7 +342,7 @@ function buildSimulators() {
   ReactTestUtils.Simulate = {};
 
   var eventType;
-  for (eventType in ReactEventEmitter.eventNameDispatchConfigs) {
+  for (eventType in ReactBrowserEventEmitter.eventNameDispatchConfigs) {
     /**
      * @param {!Element || ReactDOMComponent} domComponentOrNode
      * @param {?object} eventData Fake event data to use in SyntheticEvent.

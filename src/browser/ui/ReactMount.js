@@ -19,8 +19,10 @@
 "use strict";
 
 var DOMProperty = require('DOMProperty');
+var ReactBrowserEventEmitter = require('ReactBrowserEventEmitter');
 var ReactCurrentOwner = require('ReactCurrentOwner');
-var ReactEventEmitter = require('ReactEventEmitter');
+var ReactDescriptor = require('ReactDescriptor');
+var ReactLegacyDescriptor = require('ReactLegacyDescriptor');
 var ReactInstanceHandles = require('ReactInstanceHandles');
 var ReactPerf = require('ReactPerf');
 
@@ -30,6 +32,10 @@ var instantiateReactComponent = require('instantiateReactComponent');
 var invariant = require('invariant');
 var shouldUpdateReactComponent = require('shouldUpdateReactComponent');
 var warning = require('warning');
+
+var createDescriptor = ReactLegacyDescriptor.wrapCreateDescriptor(
+  ReactDescriptor.createDescriptor
+);
 
 var SEPARATOR = ReactInstanceHandles.SEPARATOR;
 
@@ -212,15 +218,6 @@ function findDeepestCachedAncestor(targetID) {
  * Inside of `container`, the first element rendered is the "reactRoot".
  */
 var ReactMount = {
-  /** Time spent generating markup. */
-  totalInstantiationTime: 0,
-
-  /** Time spent inserting markup into the DOM. */
-  totalInjectionTime: 0,
-
-  /** Whether support for touch events should be initialized. */
-  useTouchEvents: false,
-
   /** Exposed for debugging purposes **/
   _instancesByReactRootID: instancesByReactRootID,
 
@@ -278,7 +275,7 @@ var ReactMount = {
       '_registerComponent(...): Target container is not a DOM element.'
     );
 
-    ReactEventEmitter.ensureScrollValueMonitoring();
+    ReactBrowserEventEmitter.ensureScrollValueMonitoring();
 
     var reactRootID = ReactMount.registerContainer(container);
     instancesByReactRootID[reactRootID] = nextComponent;
@@ -344,6 +341,21 @@ var ReactMount = {
    * @return {ReactComponent} Component instance rendered in `container`.
    */
   renderComponent: function(nextDescriptor, container, callback) {
+    invariant(
+      ReactDescriptor.isValidDescriptor(nextDescriptor),
+      'renderComponent(): Invalid component descriptor.%s',
+      (
+        ReactDescriptor.isValidFactory(nextDescriptor) ?
+          ' Instead of passing a component class, make sure to instantiate ' +
+          'it first by calling it with props.' :
+        // Check if it quacks like a descriptor
+        typeof nextDescriptor.props !== "undefined" ?
+          ' This may be caused by unintentionally loading two independent ' +
+          'copies of React.' :
+          ''
+      )
+    );
+
     var prevComponent = instancesByReactRootID[getReactRootID(container)];
 
     if (prevComponent) {
@@ -385,7 +397,8 @@ var ReactMount = {
    * @return {ReactComponent} Component instance rendered in `container`.
    */
   constructAndRenderComponent: function(constructor, props, container) {
-    return ReactMount.renderComponent(constructor(props), container);
+    var descriptor = createDescriptor(constructor, props);
+    return ReactMount.renderComponent(descriptor, container);
   },
 
   /**
@@ -642,9 +655,10 @@ var ReactMount = {
       false,
       'findComponentRoot(..., %s): Unable to find element. This probably ' +
       'means the DOM was unexpectedly mutated (e.g., by the browser), ' +
-      'usually due to forgetting a <tbody> when using tables or nesting <p> ' +
-      'or <a> tags. Try inspecting the child nodes of the element with React ' +
-      'ID `%s`.',
+      'usually due to forgetting a <tbody> when using tables, nesting tags ' +
+      'like <form>, <p>, or <a>, or using non-SVG elements in an <svg> ' +
+      'parent. ' +
+      'Try inspecting the child nodes of the element with React ID `%s`.',
       targetID,
       ReactMount.getID(ancestorNode)
     );

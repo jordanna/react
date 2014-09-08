@@ -47,7 +47,8 @@ if (__DEV__) {
   var warnedProperties = {};
 
   var warnUnknownProperty = function(name) {
-    if (reactProps[name] || warnedProperties[name]) {
+    if (reactProps.hasOwnProperty(name) && reactProps[name] ||
+        warnedProperties.hasOwnProperty(name) && warnedProperties[name]) {
       return;
     }
 
@@ -55,8 +56,13 @@ if (__DEV__) {
     var lowerCasedName = name.toLowerCase();
 
     // data-* attributes should be lowercase; suggest the lowercase version
-    var standardName = DOMProperty.isCustomAttribute(lowerCasedName) ?
-      lowerCasedName : DOMProperty.getPossibleStandardName[lowerCasedName];
+    var standardName = (
+      DOMProperty.isCustomAttribute(lowerCasedName) ?
+        lowerCasedName :
+      DOMProperty.getPossibleStandardName.hasOwnProperty(lowerCasedName) ?
+        DOMProperty.getPossibleStandardName[lowerCasedName] :
+        null
+    );
 
     // For now, only warn when we have a suggested correction. This prevents
     // logging too much when using transferPropsTo.
@@ -92,7 +98,8 @@ var DOMPropertyOperations = {
    * @return {?string} Markup string, or null if the property was invalid.
    */
   createMarkupForProperty: function(name, value) {
-    if (DOMProperty.isStandardName[name]) {
+    if (DOMProperty.isStandardName.hasOwnProperty(name) &&
+        DOMProperty.isStandardName[name]) {
       if (shouldIgnoreValue(name, value)) {
         return '';
       }
@@ -123,17 +130,25 @@ var DOMPropertyOperations = {
    * @param {*} value
    */
   setValueForProperty: function(node, name, value) {
-    if (DOMProperty.isStandardName[name]) {
+    if (DOMProperty.isStandardName.hasOwnProperty(name) &&
+        DOMProperty.isStandardName[name]) {
       var mutationMethod = DOMProperty.getMutationMethod[name];
       if (mutationMethod) {
         mutationMethod(node, value);
       } else if (shouldIgnoreValue(name, value)) {
         this.deleteValueForProperty(node, name);
       } else if (DOMProperty.mustUseAttribute[name]) {
+        // `setAttribute` with objects becomes only `[object]` in IE8/9,
+        // ('' + value) makes it output the correct toString()-value.
         node.setAttribute(DOMProperty.getAttributeName[name], '' + value);
       } else {
         var propName = DOMProperty.getPropertyName[name];
-        if (!DOMProperty.hasSideEffects[name] || node[propName] !== value) {
+        // Must explicitly cast values for HAS_SIDE_EFFECTS-properties to the
+        // property type before comparing; only `value` does and is string.
+        if (!DOMProperty.hasSideEffects[name] ||
+            ('' + node[propName]) !== ('' + value)) {
+          // Contrary to `setAttribute`, object properties are properly
+          // `toString`ed by IE8/9.
           node[propName] = value;
         }
       }
@@ -155,7 +170,8 @@ var DOMPropertyOperations = {
    * @param {string} name
    */
   deleteValueForProperty: function(node, name) {
-    if (DOMProperty.isStandardName[name]) {
+    if (DOMProperty.isStandardName.hasOwnProperty(name) &&
+        DOMProperty.isStandardName[name]) {
       var mutationMethod = DOMProperty.getMutationMethod[name];
       if (mutationMethod) {
         mutationMethod(node, undefined);
@@ -168,7 +184,7 @@ var DOMPropertyOperations = {
           propName
         );
         if (!DOMProperty.hasSideEffects[name] ||
-            node[propName] !== defaultValue) {
+            ('' + node[propName]) !== defaultValue) {
           node[propName] = defaultValue;
         }
       }

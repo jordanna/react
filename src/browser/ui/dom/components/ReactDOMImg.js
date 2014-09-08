@@ -18,14 +18,15 @@
 
 "use strict";
 
+var EventConstants = require('EventConstants');
+var LocalEventTrapMixin = require('LocalEventTrapMixin');
 var ReactBrowserComponentMixin = require('ReactBrowserComponentMixin');
 var ReactCompositeComponent = require('ReactCompositeComponent');
+var ReactDescriptor = require('ReactDescriptor');
 var ReactDOM = require('ReactDOM');
-var ReactEventEmitter = require('ReactEventEmitter');
-var EventConstants = require('EventConstants');
 
-// Store a reference to the <img> `ReactDOMComponent`.
-var img = ReactDOM.img;
+// Store a reference to the <img> `ReactDOMComponent`. TODO: use string
+var img = ReactDescriptor.createFactory(ReactDOM.img.type);
 
 /**
  * Since onLoad doesn't bubble OR capture on the top level in IE8, we need to
@@ -37,24 +38,15 @@ var ReactDOMImg = ReactCompositeComponent.createClass({
   displayName: 'ReactDOMImg',
   tagName: 'IMG',
 
-  mixins: [ReactBrowserComponentMixin],
+  mixins: [ReactBrowserComponentMixin, LocalEventTrapMixin],
 
   render: function() {
     return img(this.props);
   },
 
   componentDidMount: function() {
-    var node = this.getDOMNode();
-    ReactEventEmitter.trapBubbledEvent(
-      EventConstants.topLevelTypes.topLoad,
-      'load',
-      node
-    );
-    ReactEventEmitter.trapBubbledEvent(
-      EventConstants.topLevelTypes.topError,
-      'error',
-      node
-    );
+    this.trapBubbledEvent(EventConstants.topLevelTypes.topLoad, 'load');
+    this.trapBubbledEvent(EventConstants.topLevelTypes.topError, 'error');
   }
 });
 

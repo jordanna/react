@@ -22,8 +22,10 @@ var ReactComponent = require('ReactComponent');
 var ReactContext = require('ReactContext');
 var ReactCurrentOwner = require('ReactCurrentOwner');
 var ReactDescriptor = require('ReactDescriptor');
+var ReactDescriptorValidator = require('ReactDescriptorValidator');
 var ReactEmptyComponent = require('ReactEmptyComponent');
 var ReactErrorUtils = require('ReactErrorUtils');
+var ReactLegacyDescriptor = require('ReactLegacyDescriptor');
 var ReactOwner = require('ReactOwner');
 var ReactPerf = require('ReactPerf');
 var ReactPropTransferer = require('ReactPropTransferer');
@@ -34,12 +36,15 @@ var ReactUpdates = require('ReactUpdates');
 var instantiateReactComponent = require('instantiateReactComponent');
 var invariant = require('invariant');
 var keyMirror = require('keyMirror');
+var keyOf = require('keyOf');
 var merge = require('merge');
 var mixInto = require('mixInto');
 var monitorCodeUse = require('monitorCodeUse');
 var mapObject = require('mapObject');
 var shouldUpdateReactComponent = require('shouldUpdateReactComponent');
 var warning = require('warning');
+
+var MIXINS_KEY = keyOf({mixins: null});
 
 /**
  * Policies that describe methods in `ReactCompositeComponentInterface`.
@@ -328,18 +333,17 @@ var ReactCompositeComponentInterface = {
  * which all other static methods are defined.
  */
 var RESERVED_SPEC_KEYS = {
-  displayName: function(ConvenienceConstructor, displayName) {
-    ConvenienceConstructor.type.displayName = displayName;
+  displayName: function(Constructor, displayName) {
+    Constructor.displayName = displayName;
   },
-  mixins: function(ConvenienceConstructor, mixins) {
+  mixins: function(Constructor, mixins) {
     if (mixins) {
       for (var i = 0; i < mixins.length; i++) {
-        mixSpecIntoComponent(ConvenienceConstructor, mixins[i]);
+        mixSpecIntoComponent(Constructor, mixins[i]);
       }
     }
   },
-  childContextTypes: function(ConvenienceConstructor, childContextTypes) {
-    var Constructor = ConvenienceConstructor.type;
+  childContextTypes: function(Constructor, childContextTypes) {
     validateTypeDef(
       Constructor,
       childContextTypes,
@@ -350,8 +354,7 @@ var RESERVED_SPEC_KEYS = {
       childContextTypes
     );
   },
-  contextTypes: function(ConvenienceConstructor, contextTypes) {
-    var Constructor = ConvenienceConstructor.type;
+  contextTypes: function(Constructor, contextTypes) {
     validateTypeDef(
       Constructor,
       contextTypes,
@@ -359,8 +362,21 @@ var RESERVED_SPEC_KEYS = {
     );
     Constructor.contextTypes = merge(Constructor.contextTypes, contextTypes);
   },
-  propTypes: function(ConvenienceConstructor, propTypes) {
-    var Constructor = ConvenienceConstructor.type;
+  /**
+   * Special case getDefaultProps which should move into statics but requires
+   * automatic merging.
+   */
+  getDefaultProps: function(Constructor, getDefaultProps) {
+    if (Constructor.getDefaultProps) {
+      Constructor.getDefaultProps = createMergedResultFunction(
+        Constructor.getDefaultProps,
+        getDefaultProps
+      );
+    } else {
+      Constructor.getDefaultProps = getDefaultProps;
+    }
+  },
+  propTypes: function(Constructor, propTypes) {
     validateTypeDef(
       Constructor,
       propTypes,
@@ -368,10 +384,19 @@ var RESERVED_SPEC_KEYS = {
     );
     Constructor.propTypes = merge(Constructor.propTypes, propTypes);
   },
-  statics: function(ConvenienceConstructor, statics) {
-    mixStaticSpecIntoComponent(ConvenienceConstructor, statics);
+  statics: function(Constructor, statics) {
+    mixStaticSpecIntoComponent(Constructor, statics);
   }
 };
+
+function getDeclarationErrorAddendum(component) {
+  var owner = component._owner || null;
+  if (owner && owner.constructor && owner.constructor.displayName) {
+    return ' Check the render method of `' + owner.constructor.displayName +
+      '`.';
+  }
+  return '';
+}
 
 function validateTypeDef(Constructor, typeDef, location) {
   for (var propName in typeDef) {
@@ -389,7 +414,9 @@ function validateTypeDef(Constructor, typeDef, location) {
 }
 
 function validateMethodOverride(proto, name) {
-  var specPolicy = ReactCompositeComponentInterface[name];
+  var specPolicy = ReactCompositeComponentInterface.hasOwnProperty(name) ?
+    ReactCompositeComponentInterface[name] :
+    null;
 
   // Disallow overriding of base class methods unless explicitly allowed.
   if (ReactCompositeComponentMixin.hasOwnProperty(name)) {
@@ -422,10 +449,11 @@ function validateLifeCycleOnReplaceState(instance) {
       compositeLifeCycleState === CompositeLifeCycle.MOUNTING,
     'replaceState(...): Can only update a mounted or mounting component.'
   );
-  invariant(compositeLifeCycleState !== CompositeLifeCycle.RECEIVING_STATE,
+  invariant(
+    ReactCurrentOwner.current == null,
     'replaceState(...): Cannot update during an existing state transition ' +
-    '(such as within `render`). This could potentially cause an infinite ' +
-    'loop so it is forbidden.'
+    '(such as within `render`). Render methods should be a pure function ' +
+    'of props and state.'
   );
   invariant(compositeLifeCycleState !== CompositeLifeCycle.UNMOUNTING,
     'replaceState(...): Cannot update while unmounting component. This ' +
@@ -437,7 +465,11 @@ function validateLifeCycleOnReplaceState(instance) {
  * Custom version of `mixInto` which handles policy validation and reserved
  * specification keys when building `ReactCompositeComponent` classses.
  */
-function mixSpecIntoComponent(ConvenienceConstructor, spec) {
+function mixSpecIntoComponent(Constructor, spec) {
+  if (!spec) {
+    return;
+  }
+
   invariant(
     !ReactDescriptor.isValidFactory(spec),
     'ReactCompositeComponent: You\'re attempting to ' +
@@ -449,18 +481,30 @@ function mixSpecIntoComponent(ConvenienceConstructor, spec) {
     'use a component as a mixin. Instead, just use a regular object.'
   );
 
-  var Constructor = ConvenienceConstructor.type;
   var proto = Constructor.prototype;
+
+  // By handling mixins before any other properties, we ensure the same
+  // chaining order is applied to methods with DEFINE_MANY policy, whether
+  // mixins are listed before or after these methods in the spec.
+  if (spec.hasOwnProperty(MIXINS_KEY)) {
+    RESERVED_SPEC_KEYS.mixins(Constructor, spec.mixins);
+  }
+
   for (var name in spec) {
-    var property = spec[name];
     if (!spec.hasOwnProperty(name)) {
       continue;
     }
 
+    if (name === MIXINS_KEY) {
+      // We have already handled mixins in a special case above
+      continue;
+    }
+
+    var property = spec[name];
     validateMethodOverride(proto, name);
 
     if (RESERVED_SPEC_KEYS.hasOwnProperty(name)) {
-      RESERVED_SPEC_KEYS[name](ConvenienceConstructor, property);
+      RESERVED_SPEC_KEYS[name](Constructor, property);
     } else {
       // Setup methods on prototype:
       // The following member methods should not be automatically bound:
@@ -521,7 +565,7 @@ function mixSpecIntoComponent(ConvenienceConstructor, spec) {
   }
 }
 
-function mixStaticSpecIntoComponent(ConvenienceConstructor, statics) {
+function mixStaticSpecIntoComponent(Constructor, statics) {
   if (!statics) {
     return;
   }
@@ -531,24 +575,25 @@ function mixStaticSpecIntoComponent(ConvenienceConstructor, statics) {
       continue;
     }
 
-    var isInherited = name in ConvenienceConstructor;
-    var result = property;
-    if (isInherited) {
-      var existingProperty = ConvenienceConstructor[name];
-      var existingType = typeof existingProperty;
-      var propertyType = typeof property;
-      invariant(
-        existingType === 'function' && propertyType === 'function',
-        'ReactCompositeComponent: You are attempting to define ' +
-        '`%s` on your component more than once, but that is only supported ' +
-        'for functions, which are chained together. This conflict may be ' +
-        'due to a mixin.',
-        name
-      );
-      result = createChainedFunction(existingProperty, property);
-    }
-    ConvenienceConstructor[name] = result;
-    ConvenienceConstructor.type[name] = result;
+    var isReserved = name in RESERVED_SPEC_KEYS;
+    invariant(
+      !isReserved,
+      'ReactCompositeComponent: You are attempting to define a reserved ' +
+      'property, `%s`, that shouldn\'t be on the "statics" key. Define it ' +
+      'as an instance property instead; it will still be accessible on the ' +
+      'constructor.',
+      name
+    );
+
+    var isInherited = name in Constructor;
+    invariant(
+      !isInherited,
+      'ReactCompositeComponent: You are attempting to define ' +
+      '`%s` on your component more than once. This conflict may be ' +
+      'due to a mixin.',
+      name
+    );
+    Constructor[name] = property;
   }
 }
 
@@ -569,7 +614,10 @@ function mergeObjectsWithNoDuplicateKeys(one, two) {
     invariant(
       one[key] === undefined,
       'mergeObjectsWithNoDuplicateKeys(): ' +
-      'Tried to merge two objects with the same key: %s',
+      'Tried to merge two objects with the same key: `%s`. This conflict ' +
+      'may be due to a mixin; in particular, this may be caused by two ' +
+      'getInitialState() or getDefaultProps() methods returning objects ' +
+      'with clashing keys.',
       key
     );
     one[key] = value;
@@ -625,19 +673,19 @@ function createChainedFunction(one, two) {
  * Top Row: ReactComponent.ComponentLifeCycle
  * Low Row: ReactComponent.CompositeLifeCycle
  *
- * +-------+------------------------------------------------------+--------+
- * |  UN   |                    MOUNTED                           |   UN   |
- * |MOUNTED|                                                      | MOUNTED|
- * +-------+------------------------------------------------------+--------+
- * |       ^--------+   +------+   +------+   +------+   +--------^        |
- * |       |        |   |      |   |      |   |      |   |        |        |
- * |    0--|MOUNTING|-0-|RECEIV|-0-|RECEIV|-0-|RECEIV|-0-|   UN   |--->0   |
- * |       |        |   |PROPS |   | PROPS|   | STATE|   |MOUNTING|        |
- * |       |        |   |      |   |      |   |      |   |        |        |
- * |       |        |   |      |   |      |   |      |   |        |        |
- * |       +--------+   +------+   +------+   +------+   +--------+        |
- * |       |                                                      |        |
- * +-------+------------------------------------------------------+--------+
+ * +-------+---------------------------------+--------+
+ * |  UN   |             MOUNTED             |   UN   |
+ * |MOUNTED|                                 | MOUNTED|
+ * +-------+---------------------------------+--------+
+ * |       ^--------+   +-------+   +--------^        |
+ * |       |        |   |       |   |        |        |
+ * |    0--|MOUNTING|-0-|RECEIVE|-0-|   UN   |--->0   |
+ * |       |        |   |PROPS  |   |MOUNTING|        |
+ * |       |        |   |       |   |        |        |
+ * |       |        |   |       |   |        |        |
+ * |       +--------+   +-------+   +--------+        |
+ * |       |                                 |        |
+ * +-------+---------------------------------+--------+
  */
 var CompositeLifeCycle = keyMirror({
   /**
@@ -654,12 +702,7 @@ var CompositeLifeCycle = keyMirror({
    * Components that are mounted and receiving new props respond to state
    * changes differently.
    */
-  RECEIVING_PROPS: null,
-  /**
-   * Components that are mounted and receiving new state are guarded against
-   * additional state changes.
-   */
-  RECEIVING_STATE: null
+  RECEIVING_PROPS: null
 });
 
 /**
@@ -722,13 +765,12 @@ var ReactCompositeComponentMixin = {
       );
       this._compositeLifeCycleState = CompositeLifeCycle.MOUNTING;
 
-      this.context = this._processContext(this._descriptor._context);
-      this._defaultProps = this.getDefaultProps ? this.getDefaultProps() : null;
-      this.props = this._processProps(this.props);
-
       if (this.__reactAutoBindMap) {
         this._bindAutoBindMethods();
       }
+
+      this.context = this._processContext(this._descriptor._context);
+      this.props = this._processProps(this.props);
 
       this.state = this.getInitialState ? this.getInitialState() : null;
       invariant(
@@ -780,8 +822,6 @@ var ReactCompositeComponentMixin = {
       this.componentWillUnmount();
     }
     this._compositeLifeCycleState = null;
-
-    this._defaultProps = null;
 
     this._renderedComponent.unmountComponent();
     this._renderedComponent = null;
@@ -845,7 +885,15 @@ var ReactCompositeComponentMixin = {
   replaceState: function(completeState, callback) {
     validateLifeCycleOnReplaceState(this);
     this._pendingState = completeState;
-    ReactUpdates.enqueueUpdate(this, callback);
+    if (this._compositeLifeCycleState !== CompositeLifeCycle.MOUNTING) {
+      // If we're in a componentWillMount handler, don't enqueue a rerender
+      // because ReactUpdates assumes we're in a browser context (which is wrong
+      // for server rendering) and we're about to do a render anyway.
+      // TODO: The callback here is ignored when setState is called from
+      // componentWillMount. Either fix it or disallow doing so completely in
+      // favor of getInitialState.
+      ReactUpdates.enqueueUpdate(this, callback);
+    }
   },
 
   /**
@@ -920,20 +968,13 @@ var ReactCompositeComponentMixin = {
    * @private
    */
   _processProps: function(newProps) {
-    var props = merge(newProps);
-    var defaultProps = this._defaultProps;
-    for (var propName in defaultProps) {
-      if (typeof props[propName] === 'undefined') {
-        props[propName] = defaultProps[propName];
-      }
-    }
     if (__DEV__) {
       var propTypes = this.constructor.propTypes;
       if (propTypes) {
-        this._checkPropTypes(propTypes, props, ReactPropTypeLocations.prop);
+        this._checkPropTypes(propTypes, newProps, ReactPropTypeLocations.prop);
       }
     }
-    return props;
+    return newProps;
   },
 
   /**
@@ -945,13 +986,19 @@ var ReactCompositeComponentMixin = {
    * @private
    */
   _checkPropTypes: function(propTypes, props, location) {
+    // TODO: Stop validating prop types here and only use the descriptor
+    // validation.
     var componentName = this.constructor.displayName;
     for (var propName in propTypes) {
       if (propTypes.hasOwnProperty(propName)) {
         var error =
           propTypes[propName](props, propName, componentName, location);
         if (error instanceof Error) {
-          warning(false, error.message);
+          // We may want to extend this logic for similar errors in
+          // renderComponent calls, so I'm abstracting it away into
+          // a function to minimize refactoring in the future
+          var addendum = getDeclarationErrorAddendum(this);
+          warning(false, error.message + addendum);
         }
       }
     }
@@ -994,38 +1041,47 @@ var ReactCompositeComponentMixin = {
       }
     }
 
-    this._compositeLifeCycleState = CompositeLifeCycle.RECEIVING_STATE;
+    this._compositeLifeCycleState = null;
 
     var nextState = this._pendingState || this.state;
     this._pendingState = null;
 
-    try {
-      if (this._pendingForceUpdate ||
-          !this.shouldComponentUpdate ||
-          this.shouldComponentUpdate(nextProps, nextState, nextContext)) {
-        this._pendingForceUpdate = false;
-        // Will set `this.props`, `this.state` and `this.context`.
-        this._performComponentUpdate(
-          nextDescriptor,
-          nextProps,
-          nextState,
-          nextContext,
-          transaction
-        );
-      } else {
-        // If it's determined that a component should not update, we still want
-        // to set props and state.
-        this._descriptor = nextDescriptor;
-        this.props = nextProps;
-        this.state = nextState;
-        this.context = nextContext;
+    var shouldUpdate =
+      this._pendingForceUpdate ||
+      !this.shouldComponentUpdate ||
+      this.shouldComponentUpdate(nextProps, nextState, nextContext);
 
-        // Owner cannot change because shouldUpdateReactComponent doesn't allow
-        // it. TODO: Remove this._owner completely.
-        this._owner = nextDescriptor._owner;
+    if (__DEV__) {
+      if (typeof shouldUpdate === "undefined") {
+        console.warn(
+          (this.constructor.displayName || 'ReactCompositeComponent') +
+          '.shouldComponentUpdate(): Returned undefined instead of a ' +
+          'boolean value. Make sure to return true or false.'
+        );
       }
-    } finally {
-      this._compositeLifeCycleState = null;
+    }
+
+    if (shouldUpdate) {
+      this._pendingForceUpdate = false;
+      // Will set `this.props`, `this.state` and `this.context`.
+      this._performComponentUpdate(
+        nextDescriptor,
+        nextProps,
+        nextState,
+        nextContext,
+        transaction
+      );
+    } else {
+      // If it's determined that a component should not update, we still want
+      // to set props and state.
+      this._descriptor = nextDescriptor;
+      this.props = nextProps;
+      this.state = nextState;
+      this.context = nextContext;
+
+      // Owner cannot change because shouldUpdateReactComponent doesn't allow
+      // it. TODO: Remove this._owner completely.
+      this._owner = nextDescriptor._owner;
     }
   },
 
@@ -1166,10 +1222,10 @@ var ReactCompositeComponentMixin = {
         'components.'
     );
     invariant(
-      compositeLifeCycleState !== CompositeLifeCycle.RECEIVING_STATE &&
-      compositeLifeCycleState !== CompositeLifeCycle.UNMOUNTING,
+      compositeLifeCycleState !== CompositeLifeCycle.UNMOUNTING &&
+      ReactCurrentOwner.current == null,
       'forceUpdate(...): Cannot force an update while unmounting component ' +
-      'or during an existing state transition (such as within `render`).'
+      'or within a `render` function.'
     );
     this._pendingForceUpdate = true;
     ReactUpdates.enqueueUpdate(this, callback);
@@ -1234,9 +1290,7 @@ var ReactCompositeComponentMixin = {
    */
   _bindAutoBindMethod: function(method) {
     var component = this;
-    var boundMethod = function() {
-      return method.apply(component, arguments);
-    };
+    var boundMethod = method.bind(component);
     if (__DEV__) {
       boundMethod.__reactBoundContext = component;
       boundMethod.__reactBoundMethod = method;
@@ -1301,22 +1355,24 @@ var ReactCompositeComponent = {
    * @public
    */
   createClass: function(spec) {
-    var Constructor = function(props, owner) {
-      this.construct(props, owner);
+    var Constructor = function(props) {
+      // This constructor is overridden by mocks. The argument is used
+      // by mocks to assert on what gets mounted. This will later be used
+      // by the stand-alone class implementation.
     };
     Constructor.prototype = new ReactCompositeComponentBase();
     Constructor.prototype.constructor = Constructor;
 
-    var ConvenienceConstructor = ReactDescriptor.createFactory(Constructor);
-
-    // TODO: Move statics off of the convenience constructor. That way the
-    // factory can be created independently from the main class.
-
     injectedMixins.forEach(
-      mixSpecIntoComponent.bind(null, ConvenienceConstructor)
+      mixSpecIntoComponent.bind(null, Constructor)
     );
 
-    mixSpecIntoComponent(ConvenienceConstructor, spec);
+    mixSpecIntoComponent(Constructor, spec);
+
+    // Initialize the defaultProps property after all mixins have been merged
+    if (Constructor.getDefaultProps) {
+      Constructor.defaultProps = Constructor.getDefaultProps();
+    }
 
     invariant(
       Constructor.prototype.render,
@@ -1345,7 +1401,14 @@ var ReactCompositeComponent = {
       }
     }
 
-    return ConvenienceConstructor;
+    if (__DEV__) {
+      return ReactLegacyDescriptor.wrapFactory(
+        ReactDescriptorValidator.createFactory(Constructor)
+      );
+    }
+    return ReactLegacyDescriptor.wrapFactory(
+      ReactDescriptor.createFactory(Constructor)
+    );
   },
 
   injection: {

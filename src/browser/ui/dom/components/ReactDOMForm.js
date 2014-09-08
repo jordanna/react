@@ -18,14 +18,15 @@
 
 "use strict";
 
+var EventConstants = require('EventConstants');
+var LocalEventTrapMixin = require('LocalEventTrapMixin');
 var ReactBrowserComponentMixin = require('ReactBrowserComponentMixin');
 var ReactCompositeComponent = require('ReactCompositeComponent');
+var ReactDescriptor = require('ReactDescriptor');
 var ReactDOM = require('ReactDOM');
-var ReactEventEmitter = require('ReactEventEmitter');
-var EventConstants = require('EventConstants');
 
-// Store a reference to the <form> `ReactDOMComponent`.
-var form = ReactDOM.form;
+// Store a reference to the <form> `ReactDOMComponent`. TODO: use string
+var form = ReactDescriptor.createFactory(ReactDOM.form.type);
 
 /**
  * Since onSubmit doesn't bubble OR capture on the top level in IE8, we need
@@ -36,26 +37,18 @@ var form = ReactDOM.form;
 var ReactDOMForm = ReactCompositeComponent.createClass({
   displayName: 'ReactDOMForm',
 
-  mixins: [ReactBrowserComponentMixin],
+  mixins: [ReactBrowserComponentMixin, LocalEventTrapMixin],
 
   render: function() {
     // TODO: Instead of using `ReactDOM` directly, we should use JSX. However,
     // `jshint` fails to parse JSX so in order for linting to work in the open
     // source repo, we need to just use `ReactDOM.form`.
-    return this.transferPropsTo(form(null, this.props.children));
+    return form(this.props);
   },
 
   componentDidMount: function() {
-    ReactEventEmitter.trapBubbledEvent(
-      EventConstants.topLevelTypes.topReset,
-      'reset',
-      this.getDOMNode()
-    );
-    ReactEventEmitter.trapBubbledEvent(
-      EventConstants.topLevelTypes.topSubmit,
-      'submit',
-      this.getDOMNode()
-    );
+    this.trapBubbledEvent(EventConstants.topLevelTypes.topReset, 'reset');
+    this.trapBubbledEvent(EventConstants.topLevelTypes.topSubmit, 'submit');
   }
 });
 

@@ -20,6 +20,9 @@
 
 var ExecutionEnvironment = require('ExecutionEnvironment');
 
+var WHITESPACE_TEST = /^[ \r\n\t\f]/;
+var NONVISIBLE_TEST = /<(!--|link|noscript|meta|script|style)[ \r\n\t\f\/>]/;
+
 /**
  * Set the innerHTML property of a node, ensuring that whitespace is preserved
  * even in IE8.
@@ -52,11 +55,24 @@ if (ExecutionEnvironment.canUseDOM) {
         node.parentNode.replaceChild(node, node);
       }
 
-      if (html.match(/^[ \r\n\t\f]/)) {
+      // We also implement a workaround for non-visible tags disappearing into
+      // thin air on IE8, this only happens if there is no visible text
+      // in-front of the non-visible tags. Piggyback on the whitespace fix
+      // and simply check if any non-visible tags appear in the source.
+      if (WHITESPACE_TEST.test(html) ||
+          html[0] === '<' && NONVISIBLE_TEST.test(html)) {
         // Recover leading whitespace by temporarily prepending any character.
         // \uFEFF has the potential advantage of being zero-width/invisible.
         node.innerHTML = '\uFEFF' + html;
-        node.firstChild.deleteData(0, 1);
+
+        // deleteData leaves an empty `TextNode` which offsets the index of all
+        // children. Definitely want to avoid this.
+        var textNode = node.firstChild;
+        if (textNode.data.length === 1) {
+          node.removeChild(textNode);
+        } else {
+          textNode.deleteData(0, 1);
+        }
       } else {
         node.innerHTML = html;
       }

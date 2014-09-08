@@ -98,7 +98,8 @@ describe('ReactCompositeComponent', function() {
         console.log(this.getDOMNode());
       },
       render: function() {
-        return this.state.component ? this.state.component() : null;
+        var component = this.state.component;
+        return component ? <component /> : null;
       }
     });
 
@@ -108,6 +109,31 @@ describe('ReactCompositeComponent', function() {
 
   afterEach(function() {
     console.warn = warn;
+  });
+
+  it('should give context for PropType errors in nested components.', () => {
+    // In this test, we're making sure that if a proptype error is found in a
+    // component, we give a small hint as to which parent instantiated that
+    // component as per warnings about key usage in ReactDescriptorValidator.
+    spyOn(console, 'warn');
+    var MyComp = React.createClass({
+      propTypes: {
+        color: ReactPropTypes.string
+      },
+      render: function() {
+        return <div>My color is {this.color}</div>;
+      }
+    });
+    var ParentComp = React.createClass({
+      render: function() {
+        return <MyComp color={123} />;
+      }
+    });
+    ReactTestUtils.renderIntoDocument(<ParentComp />);
+    expect(console.warn.calls[0].args[0]).toBe(
+      'Warning: Invalid prop `color` of type `number` supplied to `MyComp`, ' +
+      'expected `string`. Check the render method of `ParentComp`.'
+    );
   });
 
   it('should support rendering to different child types over time', function() {
@@ -129,7 +155,7 @@ describe('ReactCompositeComponent', function() {
       .toBeDOMComponentWithTag('a');
   });
 
-  it('should render null and false as a script tag under the hood', () => {
+  it('should render null and false as a noscript tag under the hood', () => {
     var Component1 = React.createClass({
       render: function() {
         return null;
@@ -145,10 +171,10 @@ describe('ReactCompositeComponent', function() {
     var instance2 = ReactTestUtils.renderIntoDocument(<Component2 />);
     reactComponentExpect(instance1)
       .expectRenderedChild()
-      .toBeDOMComponentWithTag('script');
+      .toBeDOMComponentWithTag('noscript');
     reactComponentExpect(instance2)
       .expectRenderedChild()
-      .toBeDOMComponentWithTag('script');
+      .toBeDOMComponentWithTag('noscript');
   });
 
   it('should still throw when rendering to undefined', () => {
@@ -376,10 +402,23 @@ describe('ReactCompositeComponent', function() {
 
   });
 
+  it('should not pass this to getDefaultProps', function() {
+    var Component = React.createClass({
+      getDefaultProps: function() {
+        expect(this.render).not.toBeDefined();
+        return {};
+      },
+      render: function() {
+        return <div />;
+      }
+    });
+    ReactTestUtils.renderIntoDocument(<Component />);
+  });
+
   it('should use default values for undefined props', function() {
     var Component = React.createClass({
       getDefaultProps: function() {
-        return {key: 'testKey'};
+        return {prop: 'testKey'};
       },
       render: function() {
         return <span />;
@@ -388,21 +427,21 @@ describe('ReactCompositeComponent', function() {
 
     var instance1 = <Component />;
     instance1 = ReactTestUtils.renderIntoDocument(instance1);
-    reactComponentExpect(instance1).scalarPropsEqual({key: 'testKey'});
+    reactComponentExpect(instance1).scalarPropsEqual({prop: 'testKey'});
 
-    var instance2 = <Component key={undefined} />;
+    var instance2 = <Component prop={undefined} />;
     instance2 = ReactTestUtils.renderIntoDocument(instance2);
-    reactComponentExpect(instance2).scalarPropsEqual({key: 'testKey'});
+    reactComponentExpect(instance2).scalarPropsEqual({prop: 'testKey'});
 
-    var instance3 = <Component key={null} />;
+    var instance3 = <Component prop={null} />;
     instance3 = ReactTestUtils.renderIntoDocument(instance3);
-    reactComponentExpect(instance3).scalarPropsEqual({key: null});
+    reactComponentExpect(instance3).scalarPropsEqual({prop: null});
   });
 
   it('should not mutate passed-in props object', function() {
     var Component = React.createClass({
       getDefaultProps: function() {
-        return {key: 'testKey'};
+        return {prop: 'testKey'};
       },
       render: function() {
         return <span />;
@@ -410,16 +449,16 @@ describe('ReactCompositeComponent', function() {
     });
 
     var inputProps = {};
-    var instance1 = Component(inputProps);
+    var instance1 = <Component {...inputProps} />;
     instance1 = ReactTestUtils.renderIntoDocument(instance1);
-    expect(instance1.props.key).toBe('testKey');
+    expect(instance1.props.prop).toBe('testKey');
 
     // We don't mutate the input, just in case the caller wants to do something
     // with it after using it to instantiate a component
-    expect(inputProps.key).not.toBeDefined();
+    expect(inputProps.prop).not.toBeDefined();
   });
 
-  it('should use default prop value when removing a key', function() {
+  it('should use default prop value when removing a prop', function() {
     var Component = React.createClass({
       getDefaultProps: function() {
         return {fruit: 'persimmon'};
@@ -442,38 +481,38 @@ describe('ReactCompositeComponent', function() {
 
   it('should normalize props with default values', function() {
     var Component = React.createClass({
-      propTypes: {key: ReactPropTypes.string.isRequired},
+      propTypes: {prop: ReactPropTypes.string.isRequired},
       getDefaultProps: function() {
-        return {key: 'testKey'};
+        return {prop: 'testKey'};
       },
       getInitialState: function() {
-        return {key: this.props.key + 'State'};
+        return {prop: this.props.prop + 'State'};
       },
       render: function() {
-        return <span>{this.props.key}</span>;
+        return <span>{this.props.prop}</span>;
       }
     });
 
     var instance = ReactTestUtils.renderIntoDocument(<Component />);
-    reactComponentExpect(instance).scalarPropsEqual({key: 'testKey'});
-    reactComponentExpect(instance).scalarStateEqual({key: 'testKeyState'});
+    reactComponentExpect(instance).scalarPropsEqual({prop: 'testKey'});
+    reactComponentExpect(instance).scalarStateEqual({prop: 'testKeyState'});
 
-    ReactTestUtils.renderIntoDocument(<Component key={null} />);
+    ReactTestUtils.renderIntoDocument(<Component prop={null} />);
 
     expect(console.warn.mock.calls.length).toBe(1);
     expect(console.warn.mock.calls[0][0]).toBe(
-      'Warning: Required prop `key` was not specified in `Component`.'
+      'Warning: Required prop `prop` was not specified in `Component`.'
     );
   });
 
   it('should check default prop values', function() {
     var Component = React.createClass({
-      propTypes: {key: ReactPropTypes.string.isRequired},
+      propTypes: {prop: ReactPropTypes.string.isRequired},
       getDefaultProps: function() {
-        return {key: null};
+        return {prop: null};
       },
       render: function() {
-        return <span>{this.props.key}</span>;
+        return <span>{this.props.prop}</span>;
       }
     });
 
@@ -481,34 +520,34 @@ describe('ReactCompositeComponent', function() {
 
     expect(console.warn.mock.calls.length).toBe(1);
     expect(console.warn.mock.calls[0][0]).toBe(
-      'Warning: Required prop `key` was not specified in `Component`.'
+      'Warning: Required prop `prop` was not specified in `Component`.'
     );
   });
 
   it('should check declared prop types', function() {
     var Component = React.createClass({
       propTypes: {
-        key: ReactPropTypes.string.isRequired
+        prop: ReactPropTypes.string.isRequired
       },
       render: function() {
-        return <span>{this.props.key}</span>;
+        return <span>{this.props.prop}</span>;
       }
     });
 
     ReactTestUtils.renderIntoDocument(<Component />);
-    ReactTestUtils.renderIntoDocument(<Component key={42} />);
+    ReactTestUtils.renderIntoDocument(<Component prop={42} />);
 
     expect(console.warn.mock.calls.length).toBe(2);
     expect(console.warn.mock.calls[0][0]).toBe(
-      'Warning: Required prop `key` was not specified in `Component`.'
+      'Warning: Required prop `prop` was not specified in `Component`.'
     );
 
     expect(console.warn.mock.calls[1][0]).toBe(
-      'Warning: Invalid prop `key` of type `number` supplied to ' +
+      'Warning: Invalid prop `prop` of type `number` supplied to ' +
       '`Component`, expected `string`.'
     );
 
-    ReactTestUtils.renderIntoDocument(<Component key="string" />);
+    ReactTestUtils.renderIntoDocument(<Component prop="string" />);
 
     // Should not error for strings
     expect(console.warn.mock.calls.length).toBe(2);
@@ -519,14 +558,14 @@ describe('ReactCompositeComponent', function() {
       React.createClass({
         displayName: 'Component',
         propTypes: {
-          key: null
+          prop: null
         },
         render: function() {
-          return <span>{this.props.key}</span>;
+          return <span>{this.props.prop}</span>;
         }
       });
     }).toThrow(
-      'Invariant Violation: Component: prop type `key` is invalid; ' +
+      'Invariant Violation: Component: prop type `prop` is invalid; ' +
       'it must be a function, usually from React.PropTypes.'
     );
   });
@@ -536,14 +575,14 @@ describe('ReactCompositeComponent', function() {
       React.createClass({
         displayName: 'Component',
         contextTypes: {
-          key: null
+          prop: null
         },
         render: function() {
-          return <span>{this.props.key}</span>;
+          return <span>{this.props.prop}</span>;
         }
       });
     }).toThrow(
-      'Invariant Violation: Component: context type `key` is invalid; ' +
+      'Invariant Violation: Component: context type `prop` is invalid; ' +
       'it must be a function, usually from React.PropTypes.'
     );
   });
@@ -553,14 +592,14 @@ describe('ReactCompositeComponent', function() {
       React.createClass({
         displayName: 'Component',
         childContextTypes: {
-          key: null
+          prop: null
         },
         render: function() {
-          return <span>{this.props.key}</span>;
+          return <span>{this.props.prop}</span>;
         }
       });
     }).toThrow(
-      'Invariant Violation: Component: child context type `key` is invalid; ' +
+      'Invariant Violation: Component: child context type `prop` is invalid; ' +
       'it must be a function, usually from React.PropTypes.'
     );
   });
@@ -650,7 +689,10 @@ describe('ReactCompositeComponent', function() {
       instance = ReactTestUtils.renderIntoDocument(instance);
     }).toThrow(
       'Invariant Violation: mergeObjectsWithNoDuplicateKeys(): ' +
-      'Tried to merge two objects with the same key: x'
+      'Tried to merge two objects with the same key: `x`. This conflict ' +
+      'may be due to a mixin; in particular, this may be caused by two ' +
+      'getInitialState() or getDefaultProps() methods returning objects ' +
+      'with clashing keys.'
     );
   });
 
@@ -871,6 +913,38 @@ describe('ReactCompositeComponent', function() {
     expect(React.isValidClass(TrickFnComponent)).toBe(false);
   });
 
+  it('should warn when shouldComponentUpdate() returns undefined', function() {
+    var warn = console.warn;
+    console.warn = mocks.getMockFunction();
+
+    try {
+      var Component = React.createClass({
+        getInitialState: function () {
+          return {bogus: false};
+        },
+
+        shouldComponentUpdate: function() {
+          return undefined;
+        },
+
+        render: function() {
+          return <div />;
+        }
+      });
+
+      var instance = ReactTestUtils.renderIntoDocument(<Component />);
+      instance.setState({bogus: true});
+
+      expect(console.warn.mock.calls.length).toBe(1);
+      expect(console.warn.mock.calls[0][0]).toBe(
+        'Component.shouldComponentUpdate(): Returned undefined instead of a ' +
+        'boolean value. Make sure to return true or false.'
+      );
+    } finally {
+      console.warn = warn;
+    }
+  });
+
   it('should warn when mispelling shouldComponentUpdate', function() {
     var warn = console.warn;
     console.warn = mocks.getMockFunction();
@@ -906,7 +980,7 @@ describe('ReactCompositeComponent', function() {
         'because the function is expected to return a value.'
       );
 
-      NamedComponent(); // Shut up lint
+      <NamedComponent />; // Shut up lint
     } finally {
       console.warn = warn;
     }
@@ -1178,7 +1252,10 @@ describe('ReactCompositeComponent', function() {
         abc: 'def',
         def: 0,
         ghi: null,
-        jkl: 'mno'
+        jkl: 'mno',
+        pqr: function() {
+          return this;
+        }
       },
 
       render: function() {
@@ -1195,6 +1272,31 @@ describe('ReactCompositeComponent', function() {
     expect(Component.ghi).toBe(null);
     expect(instance.constructor.jkl).toBe('mno');
     expect(Component.jkl).toBe('mno');
+    expect(instance.constructor.pqr()).toBe(Component.type);
+    expect(Component.pqr()).toBe(Component.type);
+  });
+
+  it('should throw if a reserved property is in statics', function() {
+    expect(function() {
+      React.createClass({
+        statics: {
+          getDefaultProps: function() {
+            return {
+              foo: 0
+            };
+          }
+        },
+
+        render: function() {
+          return <span />;
+        }
+      });
+    }).toThrow(
+      'Invariant Violation: ReactCompositeComponent: You are attempting to ' +
+      'define a reserved property, `getDefaultProps`, that shouldn\'t be on ' +
+      'the "statics" key. Define it as an instance property instead; it ' +
+      'will still be accessible on the constructor.'
+    );
   });
 
   it('should support statics in mixins', function() {
@@ -1242,9 +1344,33 @@ describe('ReactCompositeComponent', function() {
       });
     }).toThrow(
       'Invariant Violation: ReactCompositeComponent: You are attempting to ' +
-      'define `abc` on your component more than once, but that is only ' +
-      'supported for functions, which are chained together. This conflict ' +
-      'may be due to a mixin.'
+      'define `abc` on your component more than once. This conflict may be ' +
+      'due to a mixin.'
+    );
+  });
+
+  it("should throw if mixins override functions in statics", function() {
+    expect(function() {
+      var Mixin = {
+        statics: {
+          abc: function() { console.log('foo'); }
+        }
+      };
+      React.createClass({
+        mixins: [Mixin],
+
+        statics: {
+          abc: function() { console.log('bar'); }
+        },
+
+        render: function() {
+          return <span />;
+        }
+      });
+    }).toThrow(
+      'Invariant Violation: ReactCompositeComponent: You are attempting to ' +
+      'define `abc` on your component more than once. This conflict may be ' +
+      'due to a mixin.'
     );
   });
 
@@ -1321,28 +1447,6 @@ describe('ReactCompositeComponent', function() {
       });
       var instance = <Component />;
       instance = ReactTestUtils.renderIntoDocument(instance);
-  });
-
-  it('should allow static methods called using type property', function() {
-    spyOn(console, 'warn');
-
-    var ComponentClass = React.createClass({
-      statics: {
-        someStaticMethod: function() {
-          return 'someReturnValue';
-        }
-      },
-      getInitialState: function() {
-        return {valueToReturn: 'hi'};
-      },
-      render: function() {
-        return <div></div>;
-      }
-    });
-
-    var descriptor = <ComponentClass />;
-    expect(descriptor.type.someStaticMethod()).toBe('someReturnValue');
-    expect(console.warn.argsForCall.length).toBe(0);
   });
 
   it('should disallow nested render calls', function() {

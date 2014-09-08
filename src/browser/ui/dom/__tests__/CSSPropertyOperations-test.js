@@ -68,6 +68,14 @@ describe('CSSPropertyOperations', function() {
     })).toBe('left:0;margin:16px;opacity:0.5;padding:4px;');
   });
 
+  it('should trim values so `px` will be appended correctly', function() {
+    expect(CSSPropertyOperations.createMarkupForStyles({
+      margin: '16 ',
+      opacity: 0.5,
+      padding: ' 4 '
+    })).toBe('margin:16px;opacity:0.5;padding:4px;');
+  });
+
   it('should not append `px` to styles that might need a number', function() {
     var CSSProperty = require('CSSProperty');
     var unitlessProperties = Object.keys(CSSProperty.isUnitlessNumber);
@@ -106,6 +114,34 @@ describe('CSSPropertyOperations', function() {
     var root = document.createElement('div');
     React.renderComponent(div, root);
     expect(/style=".*"/.test(root.innerHTML)).toBe(false);
+  });
+
+  it('should warn when using hyphenated style names', function() {
+    spyOn(console, 'warn');
+
+    expect(CSSPropertyOperations.createMarkupForStyles({
+      'background-color': 'crimson'
+    })).toBe('background-color:crimson;');
+
+    expect(console.warn.argsForCall.length).toBe(1);
+    expect(console.warn.argsForCall[0][0]).toContain('backgroundColor');
+  });
+
+  it('should warn when updating hyphenated style names', function() {
+    spyOn(console, 'warn');
+
+    var root = document.createElement('div');
+    var styles = {
+      '-ms-transform': 'translate3d(0, 0, 0)',
+      '-webkit-transform': 'translate3d(0, 0, 0)'
+    };
+
+    React.renderComponent(<div />, root);
+    React.renderComponent(<div style={styles} />, root);
+
+    expect(console.warn.argsForCall.length).toBe(2);
+    expect(console.warn.argsForCall[0][0]).toContain('msTransform');
+    expect(console.warn.argsForCall[1][0]).toContain('WebkitTransform');
   });
 
 });

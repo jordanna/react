@@ -20,15 +20,42 @@
 "use strict";
 
 var CSSProperty = require('CSSProperty');
+var ExecutionEnvironment = require('ExecutionEnvironment');
 
+var camelizeStyleName = require('camelizeStyleName');
 var dangerousStyleValue = require('dangerousStyleValue');
-var escapeTextForBrowser = require('escapeTextForBrowser');
 var hyphenateStyleName = require('hyphenateStyleName');
 var memoizeStringOnly = require('memoizeStringOnly');
+var warning = require('warning');
 
 var processStyleName = memoizeStringOnly(function(styleName) {
-  return escapeTextForBrowser(hyphenateStyleName(styleName));
+  return hyphenateStyleName(styleName);
 });
+
+var styleFloatAccessor = 'cssFloat';
+if (ExecutionEnvironment.canUseDOM) {
+  // IE8 only supports accessing cssFloat (standard) as styleFloat
+  if (document.documentElement.style.cssFloat === undefined) {
+    styleFloatAccessor = 'styleFloat';
+  }
+}
+
+if (__DEV__) {
+  var warnedStyleNames = {};
+
+  var warnHyphenatedStyleName = function(name) {
+    if (warnedStyleNames.hasOwnProperty(name) && warnedStyleNames[name]) {
+      return;
+    }
+
+    warnedStyleNames[name] = true;
+    warning(
+      false,
+      'Unsupported style property ' + name + '. Did you mean ' +
+      camelizeStyleName(name) + '?'
+    );
+  };
+}
 
 /**
  * Operations for dealing with CSS properties.
@@ -42,6 +69,7 @@ var CSSPropertyOperations = {
    *   "width:200px;height:0;"
    *
    * Undefined values are ignored so that declarative programming is easier.
+   * The result should be HTML-escaped before insertion into the DOM.
    *
    * @param {object} styles
    * @return {?string}
@@ -51,6 +79,11 @@ var CSSPropertyOperations = {
     for (var styleName in styles) {
       if (!styles.hasOwnProperty(styleName)) {
         continue;
+      }
+      if (__DEV__) {
+        if (styleName.indexOf('-') > -1) {
+          warnHyphenatedStyleName(styleName);
+        }
       }
       var styleValue = styles[styleName];
       if (styleValue != null) {
@@ -74,7 +107,15 @@ var CSSPropertyOperations = {
       if (!styles.hasOwnProperty(styleName)) {
         continue;
       }
+      if (__DEV__) {
+        if (styleName.indexOf('-') > -1) {
+          warnHyphenatedStyleName(styleName);
+        }
+      }
       var styleValue = dangerousStyleValue(styleName, styles[styleName]);
+      if (styleName === 'float') {
+        styleName = styleFloatAccessor;
+      }
       if (styleValue) {
         style[styleName] = styleValue;
       } else {

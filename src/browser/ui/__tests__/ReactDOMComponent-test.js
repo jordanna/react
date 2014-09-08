@@ -70,7 +70,7 @@ describe('ReactDOMComponent', function() {
     });
 
     it("should update styles when mutating style object", function() {
-      var styles = { display: 'none', fontFamily: 'Arial', opacity: 0 };
+      var styles = { display: 'none', fontFamily: 'Arial', lineHeight: 1.2 };
       var stub = ReactTestUtils.renderIntoDocument(<div style={styles} />);
 
       var stubStyle = stub.getDOMNode().style;
@@ -82,21 +82,26 @@ describe('ReactDOMComponent', function() {
       stub.receiveComponent({props: { style: styles }}, transaction);
       expect(stubStyle.display).toEqual('block');
       expect(stubStyle.fontFamily).toEqual('Arial');
-      expect(stubStyle.opacity).toEqual('0');
+      expect(stubStyle.lineHeight).toEqual('1.2');
 
       styles.fontFamily = 'Helvetica';
 
       stub.receiveComponent({props: { style: styles }}, transaction);
       expect(stubStyle.display).toEqual('block');
       expect(stubStyle.fontFamily).toEqual('Helvetica');
-      expect(stubStyle.opacity).toEqual('0');
+      expect(stubStyle.lineHeight).toEqual('1.2');
 
-      styles.opacity = 0.5;
+      styles.lineHeight = 0.5;
 
       stub.receiveComponent({props: { style: styles }}, transaction);
       expect(stubStyle.display).toEqual('block');
       expect(stubStyle.fontFamily).toEqual('Helvetica');
-      expect(stubStyle.opacity).toEqual('0.5');
+      expect(stubStyle.lineHeight).toEqual('0.5');
+
+      stub.receiveComponent({props: { style: undefined }}, transaction);
+      expect(stubStyle.display).toBe('');
+      expect(stubStyle.fontFamily).toBe('');
+      expect(stubStyle.lineHeight).toBe('');
     });
 
     it("should update styles if initially null", function() {
@@ -252,6 +257,12 @@ describe('ReactDOMComponent', function() {
       expect(genMarkup({ className: 'a b' })).toHaveAttribute('class', 'a b');
       expect(genMarkup({ className: '' })).toHaveAttribute('class', '');
     });
+
+    it("should escape style names and values", function() {
+      expect(genMarkup({
+        style: {'b&ckground': '<3'}
+      })).toHaveAttribute('style', 'b&amp;ckground:&lt;3;');
+    });
   });
 
   describe('createContentMarkup', function() {
@@ -383,7 +394,7 @@ describe('ReactDOMComponent', function() {
   describe('unmountComponent', function() {
     it("should clean up listeners", function() {
       var React = require('React');
-      var ReactEventEmitter = require('ReactEventEmitter');
+      var ReactBrowserEventEmitter = require('ReactBrowserEventEmitter');
       var ReactMount = require('ReactMount');
 
       var container = document.createElement('div');
@@ -396,13 +407,13 @@ describe('ReactDOMComponent', function() {
       var rootNode = instance.getDOMNode();
       var rootNodeID = ReactMount.getID(rootNode);
       expect(
-        ReactEventEmitter.getListener(rootNodeID, 'onClick')
+        ReactBrowserEventEmitter.getListener(rootNodeID, 'onClick')
       ).toBe(callback);
 
       React.unmountComponentAtNode(container);
 
       expect(
-        ReactEventEmitter.getListener(rootNodeID, 'onClick')
+        ReactBrowserEventEmitter.getListener(rootNodeID, 'onClick')
       ).toBe(undefined);
     });
   });

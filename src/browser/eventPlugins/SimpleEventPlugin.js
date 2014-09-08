@@ -31,8 +31,11 @@ var SyntheticTouchEvent = require('SyntheticTouchEvent');
 var SyntheticUIEvent = require('SyntheticUIEvent');
 var SyntheticWheelEvent = require('SyntheticWheelEvent');
 
+var getEventCharCode = require('getEventCharCode');
+
 var invariant = require('invariant');
 var keyOf = require('keyOf');
+var warning = require('warning');
 
 var topLevelTypes = EventConstants.topLevelTypes;
 
@@ -299,7 +302,7 @@ var SimpleEventPlugin = {
 
   /**
    * Same as the default implementation, except cancels the event when return
-   * value is false.
+   * value is false. This behavior will be disabled in a future release.
    *
    * @param {object} Event to be dispatched.
    * @param {function} Application-level callback.
@@ -307,6 +310,14 @@ var SimpleEventPlugin = {
    */
   executeDispatch: function(event, listener, domID) {
     var returnValue = EventPluginUtils.executeDispatch(event, listener, domID);
+
+    warning(
+      typeof returnValue !== 'boolean',
+      'Returning `false` from an event handler is deprecated and will be ' +
+      'ignored in a future release. Instead, manually call ' +
+      'e.stopPropagation() or e.preventDefault(), as appropriate.'
+    );
+
     if (returnValue === false) {
       event.stopPropagation();
       event.preventDefault();
@@ -343,8 +354,9 @@ var SimpleEventPlugin = {
         break;
       case topLevelTypes.topKeyPress:
         // FireFox creates a keypress event for function keys too. This removes
-        // the unwanted keypress events.
-        if (nativeEvent.charCode === 0) {
+        // the unwanted keypress events. Enter is however both printable and
+        // non-printable. One would expect Tab to be as well (but it isn't).
+        if (getEventCharCode(nativeEvent) === 0) {
           return null;
         }
         /* falls through */

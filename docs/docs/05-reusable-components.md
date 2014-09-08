@@ -1,7 +1,6 @@
 ---
 id: reusable-components
 title: Reusable Components
-layout: docs
 permalink: reusable-components.html
 prev: multiple-components.html
 next: forms.html
@@ -50,6 +49,9 @@ React.createClass({
 
     // An array of a certain type
     optionalArrayOf: React.PropTypes.arrayOf(React.PropTypes.number),
+
+    // An object with property values of a certain type
+    optionalObjectOf: React.PropTypes.objectOf(React.PropTypes.number),
 
     // An object taking on a particular shape
     optionalObjectWithShape: React.PropTypes.shape({
@@ -131,10 +133,11 @@ var MyComponent = React.createClass({
   },
 
   render: function() {
-    return
+    return (
       <div>
         {this.props.children} // This must be exactly one element or it will throw.
-      </div>;
+      </div>
+    );
   }
 
 });
@@ -187,5 +190,5 @@ React.renderComponent(
 );
 ```
 
-A nice feature of mixins is that if a component is using multiple mixins and several mixins define the same lifecycle method (i.e. several mixins want to do some cleanup when the component is destroyed), all of the lifecycle methods are guaranteed to be called.
+A nice feature of mixins is that if a component is using multiple mixins and several mixins define the same lifecycle method (i.e. several mixins want to do some cleanup when the component is destroyed), all of the lifecycle methods are guaranteed to be called. Methods defined on mixins run in the order mixins were listed, followed by a method call on the component.
 

@@ -129,9 +129,25 @@ function mapChildren(children, func, context) {
   return mapResult;
 }
 
+function forEachSingleChildDummy(traverseContext, child, name, i) {
+  return null;
+}
+
+/**
+ * Count the number of children that are typically specified as
+ * `props.children`.
+ *
+ * @param {?*} children Children tree container.
+ * @return {number} The number of children.
+ */
+function countChildren(children, context) {
+  return traverseAllChildren(children, forEachSingleChildDummy, null);
+}
+
 var ReactChildren = {
   forEach: forEachChildren,
-  map: mapChildren
+  map: mapChildren,
+  count: countChildren
 };
 
 module.exports = ReactChildren;

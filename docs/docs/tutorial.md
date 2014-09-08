@@ -1,7 +1,6 @@
 ---
 id: tutorial
 title: Tutorial
-layout: docs
 prev: getting-started.html
 next: thinking-in-react.html
 ---
@@ -22,7 +21,7 @@ It'll also have a few neat features:
 
 ### Want to skip all this and just see the source?
 
-[It's all on GitHub.](https://github.com/petehunt/react-tutorial)
+[It's all on GitHub.](https://github.com/reactjs/react-tutorial)
 
 ### Getting started
 
@@ -40,9 +39,7 @@ For this tutorial we'll use prebuilt JavaScript files on a CDN. Open up your fav
   <body>
     <div id="content"></div>
     <script type="text/jsx">
-      /**
-       * @jsx React.DOM
-       */
+      /** @jsx React.DOM */
       // The above declaration must remain intact at the top of the script.
       // Your code here
     </script>
@@ -51,6 +48,10 @@ For this tutorial we'll use prebuilt JavaScript files on a CDN. Open up your fav
 ```
 
 For the remainder of this tutorial, we'll be writing our JavaScript code in this script tag.
+
+> Note:
+>
+> We included jQuery here because we want to simplify the code of our future ajax calls, but it's **NOT** mandatory for React to work.
 
 ### Your first component
 
@@ -88,18 +89,17 @@ The first thing you'll notice is the XML-ish syntax in your JavaScript. We have 
 
 ```javascript
 // tutorial1-raw.js
-var CommentBox = React.createClass({
+var CommentBox = React.createClass({displayName: 'CommentBox',
   render: function() {
     return (
-      React.DOM.div({
-        className: 'commentBox',
-        children: 'Hello, world! I am a CommentBox.'
-      })
+      React.DOM.div({className: "commentBox"},
+        "Hello, world! I am a CommentBox."
+      )
     );
   }
 });
 React.renderComponent(
-  CommentBox({}),
+  CommentBox(null),
   document.getElementById('content')
 );
 ```
@@ -180,11 +180,11 @@ var CommentList = React.createClass({
 });
 ```
 
-Note that we have passed some data from the parent `CommentList` component to the child `Comment` component as both XML-like children and attributes. Data passed from parent to child is called **props**, short for properties.
+Note that we have passed some data from the parent `CommentList` component to the child `Comment` components. For example, we passed *Pete Hunt* (via an attribute) and *This is one comment* (via an XML-like child node) to the first `Comment`. Data passed from parent to children components is called **props**, short for properties.
 
 ### Using props
 
-Let's create the Comment component. It will read the data passed to it from the CommentList and render some markup:
+Let's create the Comment component. Using **props** we will be able to read the data passed to it from the `CommentList`, and render some markup:
 
 ```javascript
 // tutorial5.js
@@ -304,12 +304,16 @@ React.renderComponent(
 
 Now that the data is available in the `CommentList`, let's render the comments dynamically:
 
-```javascript{4-6,9}
+```javascript{4-10,13}
 // tutorial10.js
 var CommentList = React.createClass({
   render: function() {
     var commentNodes = this.props.data.map(function (comment) {
-      return <Comment author={comment.author}>{comment.text}</Comment>;
+      return (
+        <Comment author={comment.author}>
+          {comment.text}
+        </Comment>
+      );
     });
     return (
       <div className="commentList">
@@ -385,7 +389,7 @@ var CommentBox = React.createClass({
   getInitialState: function() {
     return {data: []};
   },
-  componentWillMount: function() {
+  componentDidMount: function() {
     $.ajax({
       url: this.props.url,
       dataType: 'json',
@@ -409,7 +413,7 @@ var CommentBox = React.createClass({
 });
 ```
 
-Here, `componentWillMount` is a method called automatically by React before a component is rendered. The key to dynamic updates is the call to `this.setState()`. We replace the old array of comments with the new one from the server and the UI automatically updates itself. Because of this reactivity, it is only a minor change to add live updates. We will use simple polling here but you could easily use WebSockets or other technologies.
+Here, `componentDidMount` is a method called automatically by React when a component is rendered. The key to dynamic updates is the call to `this.setState()`. We replace the old array of comments with the new one from the server and the UI automatically updates itself. Because of this reactivity, it is only a minor change to add live updates. We will use simple polling here but you could easily use WebSockets or other technologies.
 
 ```javascript{3,19-20,34}
 // tutorial14.js
@@ -429,7 +433,7 @@ var CommentBox = React.createClass({
   getInitialState: function() {
     return {data: []};
   },
-  componentWillMount: function() {
+  componentDidMount: function() {
     this.loadCommentsFromServer();
     setInterval(this.loadCommentsFromServer, this.props.pollInterval);
   },
@@ -474,29 +478,26 @@ var CommentForm = React.createClass({
 
 Let's make the form interactive. When the user submits the form, we should clear it, submit a request to the server, and refresh the list of comments. To start, let's listen for the form's submit event and clear it.
 
-```javascript{3-13,16-17,21}
+```javascript{3-14,17-19}
 // tutorial16.js
 var CommentForm = React.createClass({
-  handleSubmit: function() {
+  handleSubmit: function(e) {
+    e.preventDefault();
     var author = this.refs.author.getDOMNode().value.trim();
     var text = this.refs.text.getDOMNode().value.trim();
     if (!text || !author) {
-      return false;
+      return;
     }
     // TODO: send request to the server
     this.refs.author.getDOMNode().value = '';
     this.refs.text.getDOMNode().value = '';
-    return false;
+    return;
   },
   render: function() {
     return (
       <form className="commentForm" onSubmit={this.handleSubmit}>
         <input type="text" placeholder="Your name" ref="author" />
-        <input
-          type="text"
-          placeholder="Say something..."
-          ref="text"
-        />
+        <input type="text" placeholder="Say something..." ref="text" />
         <input type="submit" value="Post" />
       </form>
     );
@@ -508,7 +509,7 @@ var CommentForm = React.createClass({
 
 React attaches event handlers to components using a camelCase naming convention. We attach an `onSubmit` handler to the form that clears the form fields when the form is submitted with valid input.
 
-We always return `false` from the event handler to prevent the browser's default action of submitting the form. (If you prefer, you can instead take the event as an argument and call `preventDefault()` on it.)
+Call `preventDefault()` on the event to prevent the browser's default action of submitting the form.
 
 ##### Refs
 
@@ -518,9 +519,9 @@ We use the `ref` attribute to assign a name to a child component and `this.refs`
 
 When a user submits a comment, we will need to refresh the list of comments to include the new one. It makes sense to do all of this logic in `CommentBox` since `CommentBox` owns the state that represents the list of comments.
 
-We need to pass data from the child component to its parent. We do this by passing a `callback` in props from parent to child:
+We need to pass data from the child component back up to its parent. We do this in our parent's `render` method by passing a new callback (`handleCommentSubmit`) into the child, binding it to the child's `onCommentSubmit` event. Whenever the event is triggered, the callback will be invoked:
 
-```javascript{15-17,31}
+```javascript{15-17,30}
 // tutorial17.js
 var CommentBox = React.createClass({
   loadCommentsFromServer: function() {
@@ -541,7 +542,7 @@ var CommentBox = React.createClass({
   getInitialState: function() {
     return {data: []};
   },
-  componentWillMount: function() {
+  componentDidMount: function() {
     this.loadCommentsFromServer();
     setInterval(this.loadCommentsFromServer, this.props.pollInterval);
   },
@@ -550,9 +551,7 @@ var CommentBox = React.createClass({
       <div className="commentBox">
         <h1>Comments</h1>
         <CommentList data={this.state.data} />
-        <CommentForm
-          onCommentSubmit={this.handleCommentSubmit}
-        />
+        <CommentForm onCommentSubmit={this.handleCommentSubmit} />
       </div>
     );
   }
@@ -561,26 +560,26 @@ var CommentBox = React.createClass({
 
 Let's call the callback from the `CommentForm` when the user submits the form:
 
-```javascript{6}
+```javascript{10}
 // tutorial18.js
 var CommentForm = React.createClass({
-  handleSubmit: function() {
+  handleSubmit: function(e) {
+    e.preventDefault();
     var author = this.refs.author.getDOMNode().value.trim();
     var text = this.refs.text.getDOMNode().value.trim();
+    if (!text || !author) {
+      return;
+    }
     this.props.onCommentSubmit({author: author, text: text});
     this.refs.author.getDOMNode().value = '';
     this.refs.text.getDOMNode().value = '';
-    return false;
+    return;
   },
   render: function() {
     return (
       <form className="commentForm" onSubmit={this.handleSubmit}>
         <input type="text" placeholder="Your name" ref="author" />
-        <input
-          type="text"
-          placeholder="Say something..."
-          ref="text"
-        />
+        <input type="text" placeholder="Say something..." ref="text" />
         <input type="submit" value="Post" />
       </form>
     );
@@ -622,7 +621,7 @@ var CommentBox = React.createClass({
   getInitialState: function() {
     return {data: []};
   },
-  componentWillMount: function() {
+  componentDidMount: function() {
     this.loadCommentsFromServer();
     setInterval(this.loadCommentsFromServer, this.props.pollInterval);
   },
@@ -631,9 +630,7 @@ var CommentBox = React.createClass({
       <div className="commentBox">
         <h1>Comments</h1>
         <CommentList data={this.state.data} />
-        <CommentForm
-          onCommentSubmit={this.handleCommentSubmit}
-        />
+        <CommentForm onCommentSubmit={this.handleCommentSubmit} />
       </div>
     );
   }
@@ -679,7 +676,7 @@ var CommentBox = React.createClass({
   getInitialState: function() {
     return {data: []};
   },
-  componentWillMount: function() {
+  componentDidMount: function() {
     this.loadCommentsFromServer();
     setInterval(this.loadCommentsFromServer, this.props.pollInterval);
   },
@@ -688,9 +685,7 @@ var CommentBox = React.createClass({
       <div className="commentBox">
         <h1>Comments</h1>
         <CommentList data={this.state.data} />
-        <CommentForm
-          onCommentSubmit={this.handleCommentSubmit}
-        />
+        <CommentForm onCommentSubmit={this.handleCommentSubmit} />
       </div>
     );
   }

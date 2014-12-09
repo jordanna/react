@@ -39,7 +39,7 @@ var isEndish = EventPluginUtils.isEndish;
  * in order to still be considered a 'tap' event.
  */
 var tapMoveThreshold = 10;
-
+var ignoreMouseThreshold = 350;
 /**
  * Time tolerated in between a `touchStart` and `touchEnd`
  * in order to still be considered a `tap` event.
@@ -47,7 +47,8 @@ var tapMoveThreshold = 10;
 var tapTimeThreshold = 2000;
 
 var startCoords = {x: null, y: null};
-
+var lastStartTouchEvent = null;
+var lastEndTouchEvent = null;
 var Axis = {
     x: {page: 'pageX', client: 'clientX', envScroll: 'currentPageScrollLeft'},
     y: {page: 'pageY', client: 'clientY', envScroll: 'currentPageScrollTop'}
@@ -75,7 +76,7 @@ function getDistance(coords, nativeEvent) {
         Math.pow(pageX - coords.x, 2) + Math.pow(pageY - coords.y, 2),
         0.5
     );
-    //DeviceLogger.error('distance ='+distance);
+    //device-logger/DeviceLogger.error('distance ='+distance);
     return distance;
 }
 
@@ -85,24 +86,35 @@ function getTime(nativeEvent) {
 
 function getDuration() {
     var duration = Time.end - Time.start;
-    //DeviceLogger.error('duration ='+duration);
+    //device-logger/DeviceLogger.error('duration ='+duration);
     return  duration;
 }
 
-var dependencies = [
+function isTouchDevice() {
+    return ('ontouchstart' in window);
+}
+
+var dependencies;
+var mouseDependencies = [
     topLevelTypes.topMouseDown,
     topLevelTypes.topMouseMove,
     topLevelTypes.topMouseUp
 ];
+var touchDependencies = [
+    topLevelTypes.topTouchCancel,
+    topLevelTypes.topTouchEnd,
+    topLevelTypes.topTouchStart,
+    topLevelTypes.topTouchMove
+];
 
 if (EventPluginUtils.useTouchEvents) {
-    dependencies.push(
-        topLevelTypes.topTouchCancel,
-        topLevelTypes.topTouchEnd,
-        topLevelTypes.topTouchStart,
-        topLevelTypes.topTouchMove
-    );
+    if(isTouchDevice()) {
+        dependencies = touchDependencies;
+    } else {
+        dependencies = mouseDependencies;
+    }
 }
+
 
 var eventTypes = {
     touchTap: {
@@ -132,6 +144,8 @@ var TapEventPlugin = {
 
     tapMoveThreshold: tapMoveThreshold,
 
+    ignoreMouseThreshold: ignoreMouseThreshold,
+
     eventTypes: eventTypes,
 
     /**
@@ -148,9 +162,22 @@ var TapEventPlugin = {
         topLevelTargetID,
         nativeEvent) {
 
-        //DeviceLogger.error('event = %s topLevelType = %s', nativeEvent.type , topLevelType);
+        //device-logger/DeviceLogger.error('event = %s topLevelType = %s', nativeEvent.type , topLevelType);
         var event = null;
         var distance;
+
+        if (isStartish(topLevelType)) {
+            if (lastStartTouchEvent && (nativeEvent.timeStamp - lastStartTouchEvent) < ignoreMouseThreshold) {
+                return null;
+            }
+            lastStartTouchEvent = nativeEvent.timeStamp;
+        } else if(isEndish(topLevelType)) {
+            if (lastEndTouchEvent && (nativeEvent.timeStamp - lastEndTouchEvent) < ignoreMouseThreshold) {
+                return null;
+            }
+            lastEndTouchEvent = nativeEvent.timeStamp;
+        }
+
         // Dispatch event to onTapTouchEnd when tap gesture is cancelled by moving beyond threshold
         if (!isStartish(topLevelType) && !isEndish(topLevelType)) {
             if (startCoords.x && startCoords.y) {
@@ -173,7 +200,7 @@ var TapEventPlugin = {
         if (isStartish(topLevelType)) {
             // set start time
             Time.start = getTime(nativeEvent);
-            //DeviceLogger.error('setting start = %s' , Time.start);
+            //device-logger/DeviceLogger.error('setting start = %s' , Time.start);
             startCoords.x = getAxisCoordOfEvent(Axis.x, nativeEvent);
             startCoords.y = getAxisCoordOfEvent(Axis.y, nativeEvent);
             event = SyntheticUIEvent.getPooled(
@@ -188,10 +215,10 @@ var TapEventPlugin = {
         // Dispatch event to both onTapTouchEnd and onTapTouch
         if (isEndish(topLevelType)) {
             Time.end = getTime(nativeEvent);
-            //DeviceLogger.error('setting end = %s',Time.end);
+            //device-logger/DeviceLogger.error('setting end = %s',Time.end);
 
             if (getDuration() > tapTimeThreshold) {
-                //DeviceLogger.error('ignore tap as time threshold exceeded');
+                //device-logger/DeviceLogger.error('ignore tap as time threshold exceeded');
                 event = [
                     SyntheticUIEvent.getPooled(
                         eventTypes.touchTapEnd,
@@ -216,7 +243,8 @@ var TapEventPlugin = {
                         )
                     );
                 } else {
-                    //DeviceLogger.error('ignore tap as move threshold exceeded');
+                    /*jshint noempty:false*/
+                    //device-logger/DeviceLogger.error('ignore tap as move threshold exceeded');
                 }
             }
         }
